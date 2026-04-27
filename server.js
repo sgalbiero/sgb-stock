@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const db = require('./database/db');
+require('./database/migrations/run_migrations');
 const errorHandler = require('./src/middlewares/errorHandler');
 
 // Importar rotas

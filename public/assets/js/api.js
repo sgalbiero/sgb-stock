@@ -28,9 +28,11 @@ const API = (() => {
   // --- Produtos ---
   const produtos = {
     listar: ()           => get('/produtos'),
+    listarInativos: ()   => get('/produtos/inativos'),
     obter:  (id)         => get(`/produtos/${id}`),
     criar:  (data)       => post('/produtos', data),
     atualizar: (id, data)=> put(`/produtos/${id}`, data),
+    recuperar: (id)      => put(`/produtos/${id}/recuperar`),
     desativar: (id)      => del(`/produtos/${id}`),
     adicionarVariacao: (id, data) => post(`/produtos/${id}/variacoes`, data),
     desativarVariacao: (varId)    => del(`/produtos/variacoes/${varId}`),
@@ -41,6 +43,10 @@ const API = (() => {
   const clientes = {
     listar: ()            => get('/clientes'),
     obter:  (id)          => get(`/clientes/${id}`),
+    historico: (id, params = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      return get(`/clientes/${id}/historico` + (qs ? `?${qs}` : ''));
+    },
     criar:  (data)        => post('/clientes', data),
     atualizar: (id, data) => put(`/clientes/${id}`, data),
   };
@@ -59,6 +65,7 @@ const API = (() => {
     listar: ()      => get('/vendas'),
     obter:  (id)    => get(`/vendas/${id}`),
     criar:  (data)  => post('/vendas', data),
+    pagar:  (id)    => put(`/vendas/${id}/pagar`),
     cancelar: (id)  => put(`/vendas/${id}/cancelar`),
   };
 

@@ -1,8 +1,51 @@
 const db = require('../../database/db');
 
+function normalizarIdsFornecedores(fornecedorIds) {
+  if (!Array.isArray(fornecedorIds)) return [];
+
+  return [...new Set(
+    fornecedorIds
+      .map(id => Number.parseInt(id, 10))
+      .filter(Number.isInteger)
+  )];
+}
+
+function sincronizarFornecedores(produtoId, fornecedorIds) {
+  const deleteStmt = db.prepare('DELETE FROM produto_fornecedores WHERE produto_id = ?');
+  const insertStmt = db.prepare('INSERT OR IGNORE INTO produto_fornecedores (produto_id, fornecedor_id) VALUES (?, ?)');
+
+  deleteStmt.run(produtoId);
+  for (const fornecedorId of fornecedorIds) {
+    insertStmt.run(produtoId, fornecedorId);
+  }
+}
+
+function listarProdutosPorStatus(ativo) {
+  return db.prepare(`
+    SELECT 
+      p.*,
+      COALESCE(GROUP_CONCAT(f.nome, ' | '), '') as fornecedor_nomes
+    FROM produtos p
+    LEFT JOIN produto_fornecedores pf ON pf.produto_id = p.id
+    LEFT JOIN fornecedores f ON f.id = pf.fornecedor_id
+    WHERE p.ativo = ?
+    GROUP BY p.id
+    ORDER BY p.nome ASC
+  `).all(ativo);
+}
+
 exports.listar = (req, res, next) => {
   try {
-    const produtos = db.prepare('SELECT * FROM produtos WHERE ativo = 1 ORDER BY nome ASC').all();
+    const produtos = listarProdutosPorStatus(1);
+    res.json(produtos);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.listarInativos = (req, res, next) => {
+  try {
+    const produtos = listarProdutosPorStatus(0);
     res.json(produtos);
   } catch (error) {
     next(error);
@@ -15,6 +58,13 @@ exports.obter = (req, res, next) => {
     if (!produto) return res.status(404).json({ error: 'Produto não encontrado' });
 
     const variacoes = db.prepare('SELECT * FROM produto_variacoes WHERE produto_id = ? AND ativo = 1').all(req.params.id);
+    const fornecedores = db.prepare(`
+      SELECT f.id, f.nome
+      FROM fornecedores f
+      JOIN produto_fornecedores pf ON pf.fornecedor_id = f.id
+      WHERE pf.produto_id = ?
+      ORDER BY f.nome ASC
+    `).all(req.params.id);
     
     // Buscar estoque para cada variação
     for (let variacao of variacoes) {
@@ -26,7 +76,7 @@ exports.obter = (req, res, next) => {
       `).all(variacao.id);
     }
 
-    res.json({ ...produto, variacoes });
+    res.json({ ...produto, variacoes, fornecedores });
   } catch (error) {
     next(error);
   }
@@ -34,13 +84,17 @@ exports.obter = (req, res, next) => {
 
 exports.criar = (req, res, next) => {
   try {
-    const { sku, nome, custo, preco, variacoes } = req.body;
+    const { sku, nome, custo, preco, variacoes, fornecedor_ids } = req.body;
     if (!sku || !nome) return res.status(400).json({ error: 'SKU e Nome são obrigatórios' });
+
+    const fornecedorIds = normalizarIdsFornecedores(fornecedor_ids);
 
     const transaction = db.transaction(() => {
       const stmt = db.prepare('INSERT INTO produtos (sku, nome, custo, preco) VALUES (?, ?, ?, ?)');
       const info = stmt.run(sku, nome, custo || 0, preco || 0);
       const produtoId = info.lastInsertRowid;
+
+      sincronizarFornecedores(produtoId, fornecedorIds);
 
       if (variacoes && Array.isArray(variacoes)) {
         const insertVar = db.prepare('INSERT INTO produto_variacoes (produto_id, tamanho, cor, sku_variacao) VALUES (?, ?, ?, ?)');
@@ -63,12 +117,21 @@ exports.criar = (req, res, next) => {
 
 exports.atualizar = (req, res, next) => {
   try {
-    const { sku, nome, custo, preco } = req.body;
+    const { sku, nome, custo, preco, fornecedor_ids } = req.body;
     if (!sku || !nome) return res.status(400).json({ error: 'SKU e Nome são obrigatórios' });
 
-    const stmt = db.prepare('UPDATE produtos SET sku=?, nome=?, custo=?, preco=? WHERE id=?');
-    const info = stmt.run(sku, nome, custo, preco, req.params.id);
-    
+    const fornecedorIds = normalizarIdsFornecedores(fornecedor_ids);
+
+    const transaction = db.transaction(() => {
+      const stmt = db.prepare('UPDATE produtos SET sku=?, nome=?, custo=?, preco=? WHERE id=?');
+      const info = stmt.run(sku, nome, custo, preco, req.params.id);
+
+      if (info.changes === 0) return info;
+      sincronizarFornecedores(req.params.id, fornecedorIds);
+      return info;
+    });
+
+    const info = transaction();
     if (info.changes === 0) return res.status(404).json({ error: 'Produto não encontrado' });
     res.json({ mensagem: 'Produto atualizado com sucesso' });
   } catch (error) {
@@ -83,6 +146,18 @@ exports.desativar = (req, res, next) => {
     
     if (info.changes === 0) return res.status(404).json({ error: 'Produto não encontrado' });
     res.json({ mensagem: 'Produto desativado com sucesso' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.recuperar = (req, res, next) => {
+  try {
+    const stmt = db.prepare('UPDATE produtos SET ativo=1 WHERE id=?');
+    const info = stmt.run(req.params.id);
+
+    if (info.changes === 0) return res.status(404).json({ error: 'Produto não encontrado' });
+    res.json({ mensagem: 'Produto recuperado com sucesso' });
   } catch (error) {
     next(error);
   }

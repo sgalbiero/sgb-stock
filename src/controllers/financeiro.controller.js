@@ -87,8 +87,21 @@ exports.atualizar = (req, res, next) => {
 
 exports.pagar = (req, res, next) => {
   try {
-    const stmt = db.prepare("UPDATE lancamentos_financeiros SET status='pago', pago_em=datetime('now','localtime') WHERE id=?");
-    const info = stmt.run(req.params.id);
+    const lancamento = db.prepare('SELECT venda_id FROM lancamentos_financeiros WHERE id=?').get(req.params.id);
+    if (!lancamento) return res.status(404).json({ error: 'Lançamento não encontrado' });
+
+    const transaction = db.transaction(() => {
+      const stmt = db.prepare("UPDATE lancamentos_financeiros SET status='pago', pago_em=datetime('now','localtime') WHERE id=?");
+      const info = stmt.run(req.params.id);
+
+      if (info.changes > 0 && lancamento.venda_id) {
+        db.prepare("UPDATE vendas SET status_pagamento='pago' WHERE id=?").run(lancamento.venda_id);
+      }
+
+      return info;
+    });
+
+    const info = transaction();
     if (info.changes === 0) return res.status(404).json({ error: 'Lançamento não encontrado' });
     res.json({ mensagem: 'Lançamento marcado como pago' });
   } catch (error) {

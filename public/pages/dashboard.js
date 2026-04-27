@@ -48,18 +48,21 @@ const PageDashboard = (() => {
 
       const hoje = Utils.hoje();
       const vendasHoje = vendas.filter(v => v.criado_em && v.criado_em.startsWith(hoje) && v.status === 'concluida');
-      const totalHoje = vendasHoje.reduce((s, v) => s + v.total, 0);
+      const vendasPagasHoje = vendasHoje.filter(v => v.status_pagamento === 'pago');
+      const vendasPendentesHoje = vendasHoje.filter(v => v.status_pagamento === 'aguardando_pagamento');
+      const totalRecebidoHoje = vendasPagasHoje.reduce((s, v) => s + v.total, 0);
+      const totalPendenteHoje = vendasPendentesHoje.reduce((s, v) => s + v.total, 0);
 
       document.getElementById('dash-stats').innerHTML = `
         <div class="stat-card">
-          <div class="stat-label">Vendas Hoje (valor)</div>
-          <div class="stat-value green">${Utils.moeda(totalHoje)}</div>
+          <div class="stat-label">Recebido Hoje</div>
+          <div class="stat-value green">${Utils.moeda(totalRecebidoHoje)}</div>
           <div class="stat-icon">💵</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Vendas Hoje (qtd)</div>
-          <div class="stat-value purple">${vendasHoje.length}</div>
-          <div class="stat-icon">🛒</div>
+          <div class="stat-label">Aguardando Pagamento</div>
+          <div class="stat-value purple">${Utils.moeda(totalPendenteHoje)}</div>
+          <div class="stat-icon">⏳</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Saldo Financeiro</div>
@@ -92,7 +95,7 @@ const PageDashboard = (() => {
         <div class="table-wrapper">
           <table>
             <thead><tr>
-              <th>#</th><th>Cliente</th><th>Total</th><th>Pagamento</th><th>Status</th>
+              <th>#</th><th>Cliente</th><th>Total</th><th>Pagamento</th><th>Situação</th><th>Status</th>
             </tr></thead>
             <tbody>
               ${ultimas.map(v => `
@@ -101,6 +104,7 @@ const PageDashboard = (() => {
                   <td>${v.cliente_nome || '<em style="color:var(--text-faint)">Avulso</em>'}</td>
                   <td><strong>${Utils.moeda(v.total)}</strong></td>
                   <td>${Utils.formaPagamentoLabel(v.forma_pagamento)}</td>
+                  <td><span class="badge ${v.status_pagamento === 'pago' ? 'badge-green' : 'badge-yellow'}">${v.status_pagamento === 'pago' ? 'Pago' : 'Aguardando'}</span></td>
                   <td><span class="badge ${v.status === 'concluida' ? 'badge-green' : 'badge-red'}">${v.status}</span></td>
                 </tr>
               `).join('')}

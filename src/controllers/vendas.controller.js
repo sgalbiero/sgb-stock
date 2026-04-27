@@ -1,5 +1,9 @@
 const db = require('../../database/db');
 
+function validarStatusPagamento(statusPagamento) {
+  return ['pago', 'aguardando_pagamento'].includes(statusPagamento);
+}
+
 exports.listar = (req, res, next) => {
   try {
     const vendas = db.prepare(`
@@ -41,10 +45,12 @@ exports.obter = (req, res, next) => {
 
 exports.criar = (req, res, next) => {
   try {
-    const { cliente_id, total, desconto, forma_pagamento, observacoes, itens } = req.body;
+    const { cliente_id, total, desconto, forma_pagamento, observacoes, itens, status_pagamento } = req.body;
+    const statusPagamento = status_pagamento || 'pago';
     
     if (!itens || itens.length === 0) return res.status(400).json({ error: 'A venda deve conter itens' });
     if (!total || !forma_pagamento) return res.status(400).json({ error: 'Total e forma de pagamento são obrigatórios' });
+    if (!validarStatusPagamento(statusPagamento)) return res.status(400).json({ error: 'Status de pagamento inválido' });
 
     const localPadrao = db.prepare("SELECT id FROM locais_estoque WHERE nome = 'Loja Principal' LIMIT 1").get();
     if (!localPadrao) return res.status(500).json({ error: 'Local de estoque principal não configurado' });
@@ -72,8 +78,8 @@ exports.criar = (req, res, next) => {
       }
 
       // 2. Registrar a venda
-      const insertVenda = db.prepare('INSERT INTO vendas (cliente_id, total, desconto, forma_pagamento, observacoes) VALUES (?, ?, ?, ?, ?)');
-      const infoVenda = insertVenda.run(cliente_id || null, total, desconto || 0, forma_pagamento, observacoes);
+      const insertVenda = db.prepare('INSERT INTO vendas (cliente_id, total, desconto, forma_pagamento, observacoes, status_pagamento) VALUES (?, ?, ?, ?, ?, ?)');
+      const infoVenda = insertVenda.run(cliente_id || null, total, desconto || 0, forma_pagamento, observacoes, statusPagamento);
       const vendaId = infoVenda.lastInsertRowid;
 
       // 3. Registrar itens da venda
@@ -87,8 +93,15 @@ exports.criar = (req, res, next) => {
       
       db.prepare(`
         INSERT INTO lancamentos_financeiros (tipo, descricao, valor, categoria_id, venda_id, status, pago_em) 
-        VALUES ('receita', ?, ?, ?, ?, 'pago', datetime('now', 'localtime'))
-      `).run(`Venda #${vendaId}`, total, categoriaVenda ? categoriaVenda.id : null, vendaId);
+        VALUES ('receita', ?, ?, ?, ?, ?, ?)
+      `).run(
+        `Venda #${vendaId}`,
+        total,
+        categoriaVenda ? categoriaVenda.id : null,
+        vendaId,
+        statusPagamento === 'pago' ? 'pago' : 'pendente',
+        statusPagamento === 'pago' ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null
+      );
 
       return vendaId;
     });
@@ -100,6 +113,27 @@ exports.criar = (req, res, next) => {
       res.status(400).json({ error: txError.message });
     }
 
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.marcarComoPaga = (req, res, next) => {
+  try {
+    const vendaId = req.params.id;
+    const venda = db.prepare('SELECT status, status_pagamento FROM vendas WHERE id = ?').get(vendaId);
+
+    if (!venda) return res.status(404).json({ error: 'Venda não encontrada' });
+    if (venda.status === 'cancelada') return res.status(400).json({ error: 'Venda cancelada não pode ser marcada como paga' });
+    if (venda.status_pagamento === 'pago') return res.status(400).json({ error: 'Venda já está marcada como paga' });
+
+    const transaction = db.transaction(() => {
+      db.prepare("UPDATE vendas SET status_pagamento = 'pago' WHERE id = ?").run(vendaId);
+      db.prepare("UPDATE lancamentos_financeiros SET status = 'pago', pago_em = datetime('now', 'localtime') WHERE venda_id = ?").run(vendaId);
+    });
+
+    transaction();
+    res.json({ mensagem: 'Venda marcada como paga com sucesso' });
   } catch (error) {
     next(error);
   }

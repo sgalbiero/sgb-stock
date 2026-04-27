@@ -4,6 +4,10 @@ const PageProdutos = (() => {
 
   let _todos = [];
 
+  function normalizarTexto(valor) {
+    return (valor || '').toString().toLowerCase();
+  }
+
   async function render(container) {
     container.innerHTML = `
       <div class="page-header">
@@ -11,15 +15,18 @@ const PageProdutos = (() => {
           <h1 class="page-title">📦 Produtos</h1>
           <p class="page-subtitle">Gerencie produtos, variações e estoque</p>
         </div>
-        <button class="btn btn-primary" id="btn-novo-produto">+ Novo Produto</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-outline" id="btn-produtos-excluidos" title="Ver produtos excluídos">🗑️</button>
+          <button class="btn btn-primary" id="btn-novo-produto">+ Novo Produto</button>
+        </div>
       </div>
       <div class="toolbar">
-        <input class="search-input" id="busca-produto" type="text" placeholder="Buscar por nome ou SKU..." />
+        <input class="search-input" id="busca-produto" type="text" placeholder="Buscar por nome, SKU ou fornecedor..." />
       </div>
       <div class="card">
         <div class="table-wrapper">
           <table>
-            <thead><tr><th>SKU</th><th>Nome</th><th>Custo</th><th>Preço</th><th>Margem</th><th>Ações</th></tr></thead>
+            <thead><tr><th>SKU</th><th>Nome</th><th>Fornecedores</th><th>Custo</th><th>Preço</th><th>Margem</th><th>Ações</th></tr></thead>
             <tbody id="tabela-produtos"></tbody>
           </table>
         </div>
@@ -27,6 +34,7 @@ const PageProdutos = (() => {
     `;
 
     document.getElementById('btn-novo-produto').addEventListener('click', () => abrirFormulario());
+    document.getElementById('btn-produtos-excluidos').addEventListener('click', abrirProdutosExcluidos);
     document.getElementById('busca-produto').addEventListener('input', e => filtrar(e.target.value));
 
     await carregar();
@@ -42,22 +50,25 @@ const PageProdutos = (() => {
   }
 
   function filtrar(termo) {
-    const t = termo.toLowerCase();
+    const t = normalizarTexto(termo);
     renderTabela(_todos.filter(p =>
-      p.nome.toLowerCase().includes(t) || p.sku.toLowerCase().includes(t)
+      normalizarTexto(p.nome).includes(t) ||
+      normalizarTexto(p.sku).includes(t) ||
+      normalizarTexto(p.fornecedor_nomes).includes(t)
     ));
   }
 
   function renderTabela(lista) {
     const tbody = document.getElementById('tabela-produtos');
     if (!lista.length) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📦</div><p>Nenhum produto encontrado.</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📦</div><p>Nenhum produto encontrado.</p></div></td></tr>`;
       return;
     }
     tbody.innerHTML = lista.map(p => `
       <tr>
         <td><code style="background:var(--bg-elevated);padding:2px 6px;border-radius:4px;font-size:12px">${p.sku}</code></td>
         <td><strong>${p.nome}</strong></td>
+        <td>${p.fornecedor_nomes ? p.fornecedor_nomes.split(' | ').join(', ') : '<span style="color:var(--text-faint)">—</span>'}</td>
         <td>${Utils.moeda(p.custo)}</td>
         <td><strong>${Utils.moeda(p.preco)}</strong></td>
         <td><span class="badge badge-purple">${Utils.margem(p.custo, p.preco)}</span></td>
@@ -72,9 +83,10 @@ const PageProdutos = (() => {
     `).join('');
   }
 
-  function abrirFormulario(produto = null) {
+  async function abrirFormulario(produto = null) {
     const titulo = produto ? 'Editar Produto' : 'Novo Produto';
-    const varicoesExistentes = produto?.variacoes || [];
+    const fornecedores = await API.fornecedores.listar();
+    const fornecedoresSelecionados = new Set((produto?.fornecedores || []).map(f => f.id));
     Modal.open(titulo, `
       <form id="form-produto">
         <div class="form-row">
@@ -98,6 +110,21 @@ const PageProdutos = (() => {
           </div>
         </div>
         <div id="margem-preview" style="font-size:12px;color:var(--text-muted);margin-bottom:16px"></div>
+
+        <div class="form-group">
+          <label class="form-label">Fornecedores</label>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;background:var(--bg);display:grid;gap:8px;max-height:220px;overflow:auto">
+            ${fornecedores.length
+              ? fornecedores.map(f => `
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                  <input type="checkbox" class="prod-fornecedor" value="${f.id}" ${fornecedoresSelecionados.has(f.id) ? 'checked' : ''} />
+                  <span>${f.nome}</span>
+                </label>
+              `).join('')
+              : '<small style="color:var(--text-muted)">Nenhum fornecedor ativo cadastrado.</small>'}
+          </div>
+          <small style="display:block;margin-top:8px;color:var(--text-muted)">Selecione um ou mais fornecedores vinculados a este produto.</small>
+        </div>
 
         ${!produto ? `
         <div class="form-group">
@@ -150,6 +177,7 @@ const PageProdutos = (() => {
         nome: document.getElementById('prod-nome').value,
         custo: parseFloat(document.getElementById('prod-custo').value) || 0,
         preco: parseFloat(document.getElementById('prod-preco').value) || 0,
+        fornecedor_ids: Array.from(document.querySelectorAll('.prod-fornecedor:checked')).map(el => parseInt(el.value, 10)),
       };
 
       if (!produto) {
@@ -181,9 +209,60 @@ const PageProdutos = (() => {
   async function editar(id) {
     try {
       const p = await API.produtos.obter(id);
-      abrirFormulario(p);
+      await abrirFormulario(p);
     } catch(e) {
       toast('Erro ao carregar produto.', 'error');
+    }
+  }
+
+  async function abrirProdutosExcluidos() {
+    try {
+      const produtos = await API.produtos.listarInativos();
+      Modal.open('🗑️ Produtos Excluídos', `
+        <div id="produtos-excluidos-modal">
+          ${!produtos.length ? `
+            <div class="empty-state" style="padding:30px 0">
+              <div class="empty-icon">🗑️</div>
+              <p>Nenhum produto excluído.</p>
+            </div>
+          ` : `
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>SKU</th><th>Nome</th><th>Fornecedores</th><th>Ações</th></tr></thead>
+                <tbody>
+                  ${produtos.map(p => `
+                    <tr>
+                      <td><code style="background:var(--bg-elevated);padding:2px 6px;border-radius:4px;font-size:12px">${p.sku}</code></td>
+                      <td><strong>${p.nome}</strong></td>
+                      <td>${p.fornecedor_nomes ? p.fornecedor_nomes.split(' | ').join(', ') : '<span style="color:var(--text-faint)">—</span>'}</td>
+                      <td>
+                        <button class="btn btn-success btn-sm" onclick="PageProdutos.recuperar(${p.id})">♻️ Recuperar</button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
+          <div class="form-actions" style="margin-top:16px">
+            <button type="button" class="btn btn-outline" onclick="Modal.close()">Fechar</button>
+          </div>
+        </div>
+      `);
+    } catch (e) {
+      toast('Erro ao carregar produtos excluídos: ' + e.message, 'error');
+    }
+  }
+
+  async function recuperar(id) {
+    try {
+      await API.produtos.recuperar(id);
+      toast('Produto recuperado.', 'success');
+      Modal.close();
+      await carregar();
+      await abrirProdutosExcluidos();
+    } catch (e) {
+      toast('Erro: ' + e.message, 'error');
     }
   }
 
@@ -337,5 +416,5 @@ const PageProdutos = (() => {
     }
   }
 
-  return { render, editar, verEstoque, entradaEstoque, adicionarVariacao, desativar };
+  return { render, editar, verEstoque, entradaEstoque, adicionarVariacao, desativar, recuperar };
 })();

@@ -3,9 +3,11 @@ const router = express.Router();
 const produtosController = require('../controllers/produtos.controller');
 
 router.get('/', produtosController.listar);
+router.get('/inativos', produtosController.listarInativos);
 router.get('/:id', produtosController.obter);
 router.post('/', produtosController.criar);
 router.put('/:id', produtosController.atualizar);
+router.put('/:id/recuperar', produtosController.recuperar);
 router.delete('/:id', produtosController.desativar);
 
 // Variações
