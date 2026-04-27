@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Sistema ERP para gestão de loja de calçados — produtos, clientes, vendas e financeiro." />
+  <title>SGB Stock — ERP Calçados</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/css/main.css" />
+  <link rel="stylesheet" href="/assets/css/components.css" />
+  <!-- Aplicar tema salvo antes do render para evitar flash -->
+  <script>
+    (function() {
+      const salvo = localStorage.getItem('sgb-tema');
+      const tema = salvo || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      if (tema === 'light') document.documentElement.setAttribute('data-tema', 'light');
+    })();
+  </script>
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon">👟</span>
+          <span class="logo-text">SGB Stock</span>
+        </div>
+        <button class="sidebar-toggle" id="sidebar-toggle" title="Recolher menu">&#9776;</button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#/dashboard" class="nav-item active" id="nav-dashboard" data-page="dashboard">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">Dashboard</span>
+        </a>
+        <a href="#/produtos" class="nav-item" id="nav-produtos" data-page="produtos">
+          <span class="nav-icon">📦</span>
+          <span class="nav-label">Produtos</span>
+        </a>
+        <a href="#/clientes" class="nav-item" id="nav-clientes" data-page="clientes">
+          <span class="nav-icon">👥</span>
+          <span class="nav-label">Clientes</span>
+        </a>
+        <a href="#/fornecedores" class="nav-item" id="nav-fornecedores" data-page="fornecedores">
+          <span class="nav-icon">🏭</span>
+          <span class="nav-label">Fornecedores</span>
+        </a>
+        <a href="#/vendas" class="nav-item" id="nav-vendas" data-page="vendas">
+          <span class="nav-icon">🛒</span>
+          <span class="nav-label">Vendas</span>
+        </a>
+        <a href="#/financeiro" class="nav-item" id="nav-financeiro" data-page="financeiro">
+          <span class="nav-icon">💰</span>
+          <span class="nav-label">Financeiro</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="theme-toggle" id="theme-toggle" title="Alternar modo claro/escuro">
+          <span class="theme-icon">🌙</span>
+          <span class="nav-label theme-label">Modo Claro</span>
+        </button>
+        <span class="version-label">v1.0 — Loja Familiar</span>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" id="main-content">
+      <div id="page-container">
+        <div class="loading-screen">
+          <div class="spinner"></div>
+          <p>Carregando...</p>
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Modal overlay -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div id="modal-box" class="modal-box">
+      <div class="modal-header">
+        <h2 id="modal-title">Título</h2>
+        <button id="modal-close" class="modal-close" title="Fechar">&times;</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/pages/dashboard.js"></script>
+  <script src="/pages/produtos.js"></script>
+  <script src="/pages/clientes.js"></script>
+  <script src="/pages/fornecedores.js"></script>
+  <script src="/pages/vendas.js"></script>
+  <script src="/pages/financeiro.js"></script>
+  <script src="/assets/js/router.js"></script>
+</body>
+</html>

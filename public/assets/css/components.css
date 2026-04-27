@@ -1,0 +1,276 @@
+/* =============================================
+   SGB Stock — ERP Calçados
+   components.css — Botões, Formulários, UI
+   ============================================= */
+
+/* --- Buttons --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--primary-light); box-shadow: 0 0 0 3px var(--primary-glow); }
+
+.btn-success {
+  background: var(--success);
+  color: #fff;
+}
+.btn-success:hover { background: #059669; }
+
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+.btn-danger:hover { background: #dc2626; }
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.btn-outline:hover { border-color: var(--primary); color: var(--primary-light); background: var(--primary-glow); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  padding: 6px 10px;
+}
+.btn-ghost:hover { background: var(--bg-elevated); color: var(--text); }
+
+.btn-sm { padding: 5px 12px; font-size: 12.5px; }
+.btn-lg { padding: 12px 24px; font-size: 15px; }
+
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* --- Forms --- */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.form-control {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.form-control::placeholder { color: var(--text-faint); }
+
+select.form-control {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2394a3b8' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+textarea.form-control { resize: vertical; min-height: 80px; }
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.form-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* --- List variations --- */
+.variacoes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.variacao-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.variacao-row.estoque-zero { border-color: var(--danger); background: rgba(239,68,68,0.06); }
+
+/* --- Action Buttons in Table --- */
+.action-btns {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* --- Estoque badge --- */
+.estoque-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.estoque-badge.zero { background: var(--danger-light); color: #991b1b; }
+.estoque-badge.baixo { background: var(--warning-light); color: #92400e; }
+.estoque-badge.ok { background: var(--success-light); color: #065f46; }
+
+/* --- Nova Venda - Cart --- */
+.cart-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+}
+
+.cart-item-info { flex: 1; }
+.cart-item-name { font-weight: 600; font-size: 13.5px; }
+.cart-item-meta { font-size: 12px; color: var(--text-muted); }
+.cart-item-price { font-weight: 700; color: var(--primary-light); font-size: 14px; white-space: nowrap; margin-left: 12px; }
+
+.cart-total-area {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-top: 12px;
+}
+
+.cart-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13.5px;
+  padding: 4px 0;
+}
+
+.cart-total-row.grand {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--success);
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* --- Financial balance highlight --- */
+.saldo-positivo { color: var(--success); }
+.saldo-negativo { color: var(--danger); }
+
+/* --- Tabs --- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 10px 16px;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color var(--transition), border-color var(--transition);
+}
+
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--primary-light); border-bottom-color: var(--primary-light); }
+
+/* --- Troco helper --- */
+.troco-box {
+  background: var(--success-light);
+  border: 1px solid var(--success);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #065f46;
+  margin-top: 8px;
+}
+
+/* --- WhatsApp icon --- */
+.wa-link {
+  color: #25d366;
+  text-decoration: none;
+  font-size: 16px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.wa-link:hover { opacity: 0.8; }
+
+/* --- Pagination --- */
+.pagination {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
