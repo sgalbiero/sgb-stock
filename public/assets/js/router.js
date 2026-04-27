@@ -20,6 +20,26 @@ const Router = (() => {
     const page = getCurrentPage().split('/')[0];
     const container = document.getElementById('page-container');
 
+    if (!window.Auth?.isInitialized()) {
+      container.innerHTML = '<div class="loading-screen"><div class="spinner"></div><p>Carregando...</p></div>';
+      return;
+    }
+
+    if (!window.Auth.isAuthenticated()) {
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      window.Auth.renderLogin(container);
+      return;
+    }
+
+    if (!window.Auth.canAccessPage(page)) {
+      const fallback = window.Auth.defaultPage();
+      if (page !== fallback) {
+        toast('Você não tem acesso a esta página.', 'error');
+        navigate('/' + fallback);
+        return;
+      }
+    }
+
     // Atualizar nav ativo
     document.querySelectorAll('.nav-item').forEach(el => {
       el.classList.toggle('active', el.dataset.page === page);
@@ -75,6 +95,8 @@ const Router = (() => {
       const atual = document.documentElement.getAttribute('data-tema') === 'light' ? 'light' : 'dark';
       aplicarTema(atual === 'light' ? 'dark' : 'light');
     });
+
+    document.getElementById('logout-btn')?.addEventListener('click', () => window.Auth.logout());
     // --- fim tema ---
 
     // Iniciar na rota atual ou dashboard
@@ -82,8 +104,10 @@ const Router = (() => {
     else render();
   }
 
-  return { register, navigate, init, getCurrentPage };
+  return { register, navigate, init, getCurrentPage, render };
 })();
+
+window.Router = Router;
 
 // Registrar todas as páginas
 Router.register('dashboard',    (c) => PageDashboard.render(c));
@@ -92,5 +116,7 @@ Router.register('clientes',     (c) => PageClientes.render(c));
 Router.register('fornecedores', (c) => PageFornecedores.render(c));
 Router.register('vendas',       (c) => PageVendas.render(c));
 Router.register('financeiro',   (c) => PageFinanceiro.render(c));
+Router.register('historico',    (c) => PageHistorico.render(c));
+Router.register('configuracoes', (c) => PageConfiguracoes.render(c));
 
-Router.init();
+Auth.init().then(() => Router.init());

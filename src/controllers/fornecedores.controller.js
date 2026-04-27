@@ -1,4 +1,5 @@
 const db = require('../../database/db');
+const { registrarEvento } = require('../services/audit.service');
 
 exports.listar = (req, res, next) => {
   try {
@@ -34,6 +35,15 @@ exports.criar = (req, res, next) => {
 
     const stmt = db.prepare('INSERT INTO fornecedores (nome, telefone, endereco, cidade, cep, observacoes) VALUES (?, ?, ?, ?, ?, ?)');
     const info = stmt.run(nome, telefone, endereco, cidade, cep, observacoes);
+
+    registrarEvento(req, {
+      acao: 'fornecedor.criado',
+      entidade: 'fornecedor',
+      entidadeId: info.lastInsertRowid,
+      descricao: `Fornecedor ${nome} criado`,
+      detalhes: { telefone, cidade },
+    });
+
     res.status(201).json({ id: info.lastInsertRowid, mensagem: 'Fornecedor criado com sucesso' });
   } catch (error) {
     next(error);
@@ -49,6 +59,15 @@ exports.atualizar = (req, res, next) => {
     const info = stmt.run(nome, telefone, endereco, cidade, cep, observacoes, req.params.id);
     
     if (info.changes === 0) return res.status(404).json({ error: 'Fornecedor não encontrado' });
+
+    registrarEvento(req, {
+      acao: 'fornecedor.atualizado',
+      entidade: 'fornecedor',
+      entidadeId: Number(req.params.id),
+      descricao: `Fornecedor ${nome} atualizado`,
+      detalhes: { telefone, cidade },
+    });
+
     res.json({ mensagem: 'Fornecedor atualizado com sucesso' });
   } catch (error) {
     next(error);
@@ -57,10 +76,19 @@ exports.atualizar = (req, res, next) => {
 
 exports.desativar = (req, res, next) => {
   try {
+    const fornecedor = db.prepare('SELECT nome FROM fornecedores WHERE id=?').get(req.params.id);
     const stmt = db.prepare('UPDATE fornecedores SET ativo=0 WHERE id=?');
     const info = stmt.run(req.params.id);
     
     if (info.changes === 0) return res.status(404).json({ error: 'Fornecedor não encontrado' });
+
+    registrarEvento(req, {
+      acao: 'fornecedor.desativado',
+      entidade: 'fornecedor',
+      entidadeId: Number(req.params.id),
+      descricao: `Fornecedor ${fornecedor?.nome || '#' + req.params.id} desativado`,
+    });
+
     res.json({ mensagem: 'Fornecedor desativado com sucesso' });
   } catch (error) {
     next(error);

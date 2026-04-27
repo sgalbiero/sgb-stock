@@ -84,6 +84,8 @@ html, body {
   overflow: hidden;
 }
 
+.hidden { display: none !important; }
+
 /* --- App Shell --- */
 .app-shell {
   display: flex;
@@ -195,6 +197,42 @@ html, body {
   overflow: hidden;
 }
 
+.sidebar-user {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.sidebar-user-name {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-user-role {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sidebar.collapsed .sidebar-user {
+  opacity: 0;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  overflow: hidden;
+}
+
 .version-label {
   font-size: 11px;
   color: var(--text-faint);
@@ -252,6 +290,62 @@ html, body {
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
+}
+
+body.login-mode .sidebar {
+  display: none;
+}
+
+body.login-mode .main-content {
+  width: 100%;
+}
+
+body.login-mode #page-container {
+  max-width: 540px;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-shell {
+  width: 100%;
+}
+
+.login-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 28px;
+}
+
+.login-brand {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.login-brand-icon {
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  background: var(--primary-glow);
+  font-size: 28px;
+}
+
+.login-brand h1 {
+  font-size: 24px;
+  margin-bottom: 2px;
+}
+
+.login-brand p {
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 /* --- Page Header --- */

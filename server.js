@@ -5,13 +5,17 @@ const path = require('path');
 const db = require('./database/db');
 require('./database/migrations/run_migrations');
 const errorHandler = require('./src/middlewares/errorHandler');
+const { attachAuth, requireAuth, requireRole } = require('./src/middlewares/auth');
 
 // Importar rotas
+const authRoutes = require('./src/routes/auth');
 const produtosRoutes = require('./src/routes/produtos');
 const clientesRoutes = require('./src/routes/clientes');
 const fornecedoresRoutes = require('./src/routes/fornecedores');
 const vendasRoutes = require('./src/routes/vendas');
 const financeiroRoutes = require('./src/routes/financeiro');
+const locaisRoutes = require('./src/routes/locais');
+const historicoRoutes = require('./src/routes/historico');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,21 +24,17 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(attachAuth);
 
 // Rotas API
-app.use('/api/produtos', produtosRoutes);
-app.use('/api/clientes', clientesRoutes);
-app.use('/api/fornecedores', fornecedoresRoutes);
-app.use('/api/vendas', vendasRoutes);
-app.use('/api/financeiro', financeiroRoutes);
-
-// Locais de estoque (endpoint simples)
-app.get('/api/locais', (req, res) => {
-  try {
-    const locais = db.prepare('SELECT * FROM locais_estoque ORDER BY nome').all();
-    res.json(locais);
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
+app.use('/api/auth', authRoutes);
+app.use('/api/produtos', requireAuth, produtosRoutes);
+app.use('/api/clientes', requireAuth, clientesRoutes);
+app.use('/api/fornecedores', requireAuth, fornecedoresRoutes);
+app.use('/api/vendas', requireAuth, vendasRoutes);
+app.use('/api/financeiro', requireRole('admin'), financeiroRoutes);
+app.use('/api/locais', requireAuth, locaisRoutes);
+app.use('/api/historico', requireRole('admin'), historicoRoutes);
 
 // Tratamento de erros
 app.use(errorHandler);

@@ -19,6 +19,13 @@ const PageDashboard = (() => {
         <div class="stat-card"><div class="spinner" style="margin:auto"></div></div>
       </div>
 
+      ${Auth.isAdmin() ? `
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-title">📅 Contas Próximas do Vencimento</div>
+          <div id="dash-contas-vencer"><div class="spinner" style="margin:auto;display:block"></div></div>
+        </div>
+      ` : ''}
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;flex-wrap:wrap">
         <div class="card">
           <div class="card-title">🛒 Últimas Vendas</div>
@@ -36,15 +43,13 @@ const PageDashboard = (() => {
     function tick() { dtEl.textContent = new Date().toLocaleString('pt-BR'); }
     tick(); setInterval(tick, 1000);
 
-    await Promise.all([carregarStats(), carregarUltimasVendas(), carregarAlertas()]);
+    await Promise.all([carregarStats(), carregarUltimasVendas(), carregarAlertas(), carregarContasVencer()]);
   }
 
   async function carregarStats() {
     try {
-      const [saldo, vendas] = await Promise.all([
-        API.financeiro.saldo(),
-        API.vendas.listar()
-      ]);
+      const vendas = await API.vendas.listar();
+      const saldo = Auth.isAdmin() ? await API.financeiro.saldo() : null;
 
       const hoje = Utils.hoje();
       const vendasHoje = vendas.filter(v => v.criado_em && v.criado_em.startsWith(hoje) && v.status === 'concluida');
@@ -52,6 +57,8 @@ const PageDashboard = (() => {
       const vendasPendentesHoje = vendasHoje.filter(v => v.status_pagamento === 'aguardando_pagamento');
       const totalRecebidoHoje = vendasPagasHoje.reduce((s, v) => s + v.total, 0);
       const totalPendenteHoje = vendasPendentesHoje.reduce((s, v) => s + v.total, 0);
+      const totalVendasHoje = vendasHoje.length;
+      const ticketMedioHoje = totalVendasHoje ? vendasHoje.reduce((s, v) => s + v.total, 0) / totalVendasHoje : 0;
 
       document.getElementById('dash-stats').innerHTML = `
         <div class="stat-card">
@@ -64,16 +71,29 @@ const PageDashboard = (() => {
           <div class="stat-value purple">${Utils.moeda(totalPendenteHoje)}</div>
           <div class="stat-icon">⏳</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">Saldo Financeiro</div>
-          <div class="stat-value ${saldo.saldo >= 0 ? 'green' : 'red'}">${Utils.moeda(saldo.saldo)}</div>
-          <div class="stat-icon">💰</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Despesas Pagas</div>
-          <div class="stat-value red">${Utils.moeda(saldo.despesas)}</div>
-          <div class="stat-icon">📉</div>
-        </div>
+        ${Auth.isAdmin() ? `
+          <div class="stat-card">
+            <div class="stat-label">Saldo Financeiro</div>
+            <div class="stat-value ${saldo.saldo >= 0 ? 'green' : 'red'}">${Utils.moeda(saldo.saldo)}</div>
+            <div class="stat-icon">💰</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Despesas Pagas</div>
+            <div class="stat-value red">${Utils.moeda(saldo.despesas)}</div>
+            <div class="stat-icon">📉</div>
+          </div>
+        ` : `
+          <div class="stat-card">
+            <div class="stat-label">Vendas Concluídas Hoje</div>
+            <div class="stat-value blue">${totalVendasHoje}</div>
+            <div class="stat-icon">🛒</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Ticket Médio Hoje</div>
+            <div class="stat-value blue">${Utils.moeda(ticketMedioHoje)}</div>
+            <div class="stat-icon">🎯</div>
+          </div>
+        `}
       `;
     } catch(e) {
       document.getElementById('dash-stats').innerHTML = `<div class="alert alert-danger">Erro ao carregar estatísticas.</div>`;
@@ -138,5 +158,64 @@ const PageDashboard = (() => {
     }
   }
 
-  return { render };
+  async function carregarContasVencer() {
+    const el = document.getElementById('dash-contas-vencer');
+    if (!el || !Auth.isAdmin()) return;
+
+    try {
+      const resposta = await API.financeiro.contasProximasVencer({ dias: 7 });
+      const itens = resposta.itens || [];
+      const resumo = resposta.resumo_atrasos || {};
+
+      if (!itens.length) {
+        el.innerHTML = `<div class="empty-state" style="padding:20px 0"><div class="empty-icon">✅</div><p>Nenhuma despesa pendente próxima do vencimento.</p></div>`;
+        return;
+      }
+
+      el.innerHTML = `
+        <div class="stats-grid" style="grid-template-columns:repeat(5,minmax(120px,1fr));margin-bottom:14px">
+          <div class="stat-card"><div class="stat-label">Atrasadas 1-7 dias</div><div class="stat-value red">${resumo.atrasadas_1_7 || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">Atrasadas 8-30 dias</div><div class="stat-value red">${resumo.atrasadas_8_30 || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">Atrasadas +30 dias</div><div class="stat-value red">${resumo.atrasadas_mais_30 || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">Vencem em 1-3 dias</div><div class="stat-value purple">${resumo.vencem_1_3 || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">Vencem em 4-7 dias</div><div class="stat-value purple">${resumo.vencem_4_7 || 0}</div></div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Descrição</th><th>Categoria</th><th>Vencimento</th><th>Valor</th><th>Situação</th><th>Ação</th></tr></thead>
+            <tbody>
+              ${itens.map(item => `
+                <tr>
+                  <td><strong>${item.descricao}</strong></td>
+                  <td>${item.categoria_nome || '—'}</td>
+                  <td>${Utils.data(item.vencimento)}</td>
+                  <td class="saldo-negativo">${Utils.moeda(item.valor)}</td>
+                  <td>
+                    <span class="badge ${item.urgencia === 'atrasado' ? 'badge-red' : item.urgencia === 'vence_hoje' ? 'badge-yellow' : 'badge-purple'}">
+                      ${item.urgencia === 'atrasado' ? 'Atrasado' : item.urgencia === 'vence_hoje' ? 'Vence hoje' : `Em ${item.dias_restantes} dia(s)`}
+                    </span>
+                  </td>
+                  <td><button class="btn btn-ghost btn-sm" onclick="PageDashboard.marcarContaPaga(${item.id})">✅ Pagar</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } catch (error) {
+      el.innerHTML = `<p style="color:var(--text-muted)">Erro ao carregar contas próximas do vencimento.</p>`;
+    }
+  }
+
+  async function marcarContaPaga(id) {
+    try {
+      await API.financeiro.pagar(id);
+      toast('Conta marcada como paga.', 'success');
+      await Promise.all([carregarStats(), carregarContasVencer()]);
+    } catch (error) {
+      toast('Erro: ' + error.message, 'error');
+    }
+  }
+
+  return { render, marcarContaPaga };
 })();

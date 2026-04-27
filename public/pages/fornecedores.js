@@ -4,14 +4,18 @@ const PageFornecedores = (() => {
 
   let _todos = [];
 
+  function podeGerenciar() {
+    return Auth.canManageFornecedores();
+  }
+
   async function render(container) {
     container.innerHTML = `
       <div class="page-header">
         <div>
           <h1 class="page-title">🏭 Fornecedores</h1>
-          <p class="page-subtitle">Gerencie seus fornecedores</p>
+          <p class="page-subtitle">${podeGerenciar() ? 'Gerencie seus fornecedores' : 'Visualize fornecedores e produtos vinculados'}</p>
         </div>
-        <button class="btn btn-primary" id="btn-novo-fornecedor">+ Novo Fornecedor</button>
+        ${podeGerenciar() ? '<button class="btn btn-primary" id="btn-novo-fornecedor">+ Novo Fornecedor</button>' : ''}
       </div>
       <div class="toolbar">
         <input class="search-input" id="busca-fornecedor" type="text" placeholder="Buscar por nome..." />
@@ -26,7 +30,7 @@ const PageFornecedores = (() => {
       </div>
     `;
 
-    document.getElementById('btn-novo-fornecedor').addEventListener('click', () => abrirFormulario());
+    document.getElementById('btn-novo-fornecedor')?.addEventListener('click', () => abrirFormulario());
     document.getElementById('busca-fornecedor').addEventListener('input', e => filtrar(e.target.value));
 
     await carregar();
@@ -62,8 +66,8 @@ const PageFornecedores = (() => {
         <td>
           <div class="action-btns">
             <button class="btn btn-ghost btn-sm" onclick="PageFornecedores.verProdutos(${f.id})" title="Produtos vinculados">📦</button>
-            <button class="btn btn-ghost btn-sm" onclick="PageFornecedores.editar(${f.id})" title="Editar">✏️</button>
-            <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="PageFornecedores.desativar(${f.id}, '${f.nome}')" title="Desativar">🗑️</button>
+            ${podeGerenciar() ? `<button class="btn btn-ghost btn-sm" onclick="PageFornecedores.editar(${f.id})" title="Editar">✏️</button>` : ''}
+            ${podeGerenciar() ? `<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="PageFornecedores.desativar(${f.id}, '${f.nome}')" title="Desativar">🗑️</button>` : ''}
           </div>
         </td>
       </tr>
@@ -71,6 +75,11 @@ const PageFornecedores = (() => {
   }
 
   function abrirFormulario(fornecedor = null) {
+    if (!podeGerenciar()) {
+      toast('Somente administradores podem alterar fornecedores.', 'error');
+      return;
+    }
+
     const titulo = fornecedor ? 'Editar Fornecedor' : 'Novo Fornecedor';
     Modal.open(titulo, `
       <form id="form-fornecedor">
@@ -139,6 +148,11 @@ const PageFornecedores = (() => {
   }
 
   async function editar(id) {
+    if (!podeGerenciar()) {
+      toast('Somente administradores podem editar fornecedores.', 'error');
+      return;
+    }
+
     try {
       const f = await API.fornecedores.obter(id);
       abrirFormulario(f);
@@ -170,6 +184,11 @@ const PageFornecedores = (() => {
   }
 
   async function desativar(id, nome) {
+    if (!podeGerenciar()) {
+      toast('Somente administradores podem desativar fornecedores.', 'error');
+      return;
+    }
+
     const ok = await Modal.confirm(
       `Deseja desativar o fornecedor <strong>"${nome}"</strong>?<br><small style="color:var(--text-muted)">Ele não aparecerá mais nas listagens.</small>`,
       { titulo: 'Desativar Fornecedor', textoBotaoOk: '🗑️ Desativar', icone: '🏭' }

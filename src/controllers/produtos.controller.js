@@ -1,4 +1,5 @@
 const db = require('../../database/db');
+const { registrarEvento } = require('../services/audit.service');
 
 function normalizarIdsFornecedores(fornecedorIds) {
   if (!Array.isArray(fornecedorIds)) return [];
@@ -106,6 +107,15 @@ exports.criar = (req, res, next) => {
     });
 
     const id = transaction();
+
+    registrarEvento(req, {
+      acao: 'produto.criado',
+      entidade: 'produto',
+      entidadeId: id,
+      descricao: `Produto ${nome} criado`,
+      detalhes: { sku, variacoes: Array.isArray(variacoes) ? variacoes.length : 0, fornecedores: fornecedorIds.length },
+    });
+
     res.status(201).json({ id, mensagem: 'Produto criado com sucesso' });
   } catch (error) {
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -133,6 +143,15 @@ exports.atualizar = (req, res, next) => {
 
     const info = transaction();
     if (info.changes === 0) return res.status(404).json({ error: 'Produto não encontrado' });
+
+    registrarEvento(req, {
+      acao: 'produto.atualizado',
+      entidade: 'produto',
+      entidadeId: Number(req.params.id),
+      descricao: `Produto ${nome} atualizado`,
+      detalhes: { sku, fornecedores: fornecedorIds.length },
+    });
+
     res.json({ mensagem: 'Produto atualizado com sucesso' });
   } catch (error) {
     next(error);
@@ -145,6 +164,14 @@ exports.desativar = (req, res, next) => {
     const info = stmt.run(req.params.id);
     
     if (info.changes === 0) return res.status(404).json({ error: 'Produto não encontrado' });
+
+    registrarEvento(req, {
+      acao: 'produto.desativado',
+      entidade: 'produto',
+      entidadeId: Number(req.params.id),
+      descricao: `Produto #${req.params.id} desativado`,
+    });
+
     res.json({ mensagem: 'Produto desativado com sucesso' });
   } catch (error) {
     next(error);
@@ -157,6 +184,14 @@ exports.recuperar = (req, res, next) => {
     const info = stmt.run(req.params.id);
 
     if (info.changes === 0) return res.status(404).json({ error: 'Produto não encontrado' });
+
+    registrarEvento(req, {
+      acao: 'produto.recuperado',
+      entidade: 'produto',
+      entidadeId: Number(req.params.id),
+      descricao: `Produto #${req.params.id} recuperado`,
+    });
+
     res.json({ mensagem: 'Produto recuperado com sucesso' });
   } catch (error) {
     next(error);
@@ -169,6 +204,15 @@ exports.adicionarVariacao = (req, res, next) => {
     const { tamanho, cor, sku_variacao } = req.body;
     const stmt = db.prepare('INSERT INTO produto_variacoes (produto_id, tamanho, cor, sku_variacao) VALUES (?, ?, ?, ?)');
     const info = stmt.run(req.params.id, tamanho, cor, sku_variacao);
+
+    registrarEvento(req, {
+      acao: 'produto.variacao_criada',
+      entidade: 'produto_variacao',
+      entidadeId: info.lastInsertRowid,
+      descricao: `Variação adicionada ao produto #${req.params.id}`,
+      detalhes: { produto_id: Number(req.params.id), tamanho, cor, sku_variacao },
+    });
+
     res.status(201).json({ id: info.lastInsertRowid, mensagem: 'Variação adicionada' });
   } catch (error) {
     next(error);
@@ -180,6 +224,14 @@ exports.desativarVariacao = (req, res, next) => {
     const stmt = db.prepare('UPDATE produto_variacoes SET ativo=0 WHERE id=?');
     const info = stmt.run(req.params.variacao_id);
     if (info.changes === 0) return res.status(404).json({ error: 'Variação não encontrada' });
+
+    registrarEvento(req, {
+      acao: 'produto.variacao_desativada',
+      entidade: 'produto_variacao',
+      entidadeId: Number(req.params.variacao_id),
+      descricao: `Variação #${req.params.variacao_id} desativada`,
+    });
+
     res.json({ mensagem: 'Variação desativada' });
   } catch (error) {
     next(error);
@@ -205,6 +257,14 @@ exports.entradaEstoque = (req, res, next) => {
     });
 
     transaction();
+
+    registrarEvento(req, {
+      acao: 'estoque.entrada',
+      entidade: 'estoque',
+      descricao: `Entrada de estoque registrada para a variação #${variacao_id}`,
+      detalhes: { variacao_id: Number(variacao_id), local_id: Number(local_id), quantidade: Number(quantidade) },
+    });
+
     res.json({ mensagem: 'Estoque atualizado com sucesso' });
   } catch (error) {
     next(error);

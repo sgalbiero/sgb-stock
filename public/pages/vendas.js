@@ -676,6 +676,7 @@ const PageVendas = (() => {
         ${v.observacoes ? `<p style="margin-top:12px;color:var(--text-muted);font-size:13px">📝 ${v.observacoes}</p>` : ''}
         ${v.status === 'concluida' ? `
           <div class="form-actions" style="margin-top:16px">
+            ${!v.cliente_id ? `<button class="btn btn-outline" onclick="PageVendas.vincularCliente(${v.id})">👤 Vincular Cliente</button>` : ''}
             ${v.status_pagamento !== 'pago' ? `<button class="btn btn-success" onclick="PageVendas.marcarComoPaga(${v.id})">✅ Marcar como Paga</button>` : ''}
             <button class="btn btn-danger" onclick="PageVendas.cancelar(${v.id})">❌ Cancelar Esta Venda</button>
           </div>` : ''
@@ -713,5 +714,53 @@ const PageVendas = (() => {
     }
   }
 
-  return { render, verDetalhe, cancelar, marcarComoPaga };
+  async function vincularCliente(id) {
+    try {
+      const [venda, clientes] = await Promise.all([API.vendas.obter(id), API.clientes.listar()]);
+
+      if (venda.cliente_id) {
+        toast('Esta venda já possui cliente vinculado.', 'info');
+        return;
+      }
+
+      if (!clientes.length) {
+        toast('Nenhum cliente cadastrado para vincular.', 'info');
+        return;
+      }
+
+      Modal.open(`👤 Vincular Cliente na Venda #${venda.id}`, `
+        <div>
+          <p style="margin:0 0 14px;color:var(--text-muted);font-size:13px">Selecione um cliente cadastrado para substituir o atendimento avulso desta venda.</p>
+          <div class="form-group">
+            <label class="form-label">Cliente</label>
+            <select class="form-control" id="venda-vincular-cliente">
+              <option value="">Selecione um cliente</option>
+              ${clientes.map(cliente => `<option value="${cliente.id}">${cliente.nome}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline" onclick="PageVendas.verDetalhe(${venda.id})">Voltar</button>
+            <button type="button" class="btn btn-primary" id="btn-vincular-cliente-venda">Salvar Cliente</button>
+          </div>
+        </div>
+      `);
+
+      document.getElementById('btn-vincular-cliente-venda').addEventListener('click', async () => {
+        const clienteId = document.getElementById('venda-vincular-cliente').value;
+        if (!clienteId) {
+          toast('Selecione um cliente para continuar.', 'info');
+          return;
+        }
+
+        await API.vendas.vincularCliente(venda.id, { cliente_id: Number(clienteId) });
+        toast('Cliente vinculado à venda.', 'success');
+        await carregar();
+        await verDetalhe(venda.id);
+      });
+    } catch(e) {
+      toast('Erro: ' + e.message, 'error');
+    }
+  }
+
+  return { render, verDetalhe, cancelar, marcarComoPaga, vincularCliente };
 })();

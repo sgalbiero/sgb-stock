@@ -1,4 +1,5 @@
 const db = require('../../database/db');
+const { registrarEvento } = require('../services/audit.service');
 
 function validarStatusPagamento(statusPagamento) {
   return ['pago', 'aguardando_pagamento'].includes(statusPagamento);
@@ -108,6 +109,15 @@ exports.criar = (req, res, next) => {
 
     try {
       const id = transaction();
+
+      registrarEvento(req, {
+        acao: 'venda.criada',
+        entidade: 'venda',
+        entidadeId: id,
+        descricao: `Venda #${id} criada`,
+        detalhes: { cliente_id: cliente_id || null, total, itens: itens.length, forma_pagamento, status_pagamento: statusPagamento },
+      });
+
       res.status(201).json({ id, mensagem: 'Venda realizada com sucesso' });
     } catch (txError) {
       res.status(400).json({ error: txError.message });
@@ -133,7 +143,49 @@ exports.marcarComoPaga = (req, res, next) => {
     });
 
     transaction();
+
+    registrarEvento(req, {
+      acao: 'venda.paga',
+      entidade: 'venda',
+      entidadeId: Number(vendaId),
+      descricao: `Venda #${vendaId} marcada como paga`,
+    });
+
     res.json({ mensagem: 'Venda marcada como paga com sucesso' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.vincularCliente = (req, res, next) => {
+  try {
+    const vendaId = req.params.id;
+    const { cliente_id } = req.body;
+
+    if (!cliente_id) return res.status(400).json({ error: 'Cliente é obrigatório' });
+
+    const venda = db.prepare('SELECT id, cliente_id, status FROM vendas WHERE id = ?').get(vendaId);
+    if (!venda) return res.status(404).json({ error: 'Venda não encontrada' });
+    if (venda.status === 'cancelada') return res.status(400).json({ error: 'Venda cancelada não pode ser alterada' });
+    if (venda.cliente_id) return res.status(400).json({ error: 'Somente vendas avulsas podem receber cliente após a confirmação' });
+
+    const cliente = db.prepare('SELECT id, nome FROM clientes WHERE id = ?').get(cliente_id);
+    if (!cliente) return res.status(404).json({ error: 'Cliente não encontrado' });
+
+    db.prepare('UPDATE vendas SET cliente_id = ? WHERE id = ?').run(cliente.id, vendaId);
+
+    registrarEvento(req, {
+      acao: 'venda.cliente_vinculado',
+      entidade: 'venda',
+      entidadeId: Number(vendaId),
+      descricao: `Cliente vinculado à venda #${vendaId}`,
+      detalhes: { cliente_id: cliente.id, cliente_nome: cliente.nome },
+    });
+
+    res.json({
+      mensagem: 'Cliente vinculado à venda com sucesso',
+      cliente: { id: cliente.id, nome: cliente.nome }
+    });
   } catch (error) {
     next(error);
   }
@@ -169,6 +221,14 @@ exports.cancelar = (req, res, next) => {
     });
 
     transaction();
+
+    registrarEvento(req, {
+      acao: 'venda.cancelada',
+      entidade: 'venda',
+      entidadeId: Number(vendaId),
+      descricao: `Venda #${vendaId} cancelada`,
+    });
+
     res.json({ mensagem: 'Venda cancelada com sucesso. Estoque reposto.' });
 
   } catch (error) {

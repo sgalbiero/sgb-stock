@@ -28,6 +28,31 @@ npm run dev
 
 O sistema executa as migracoes automaticamente ao iniciar e cria o banco SQLite local caso ele ainda nao exista.
 
+## Login e perfis
+
+O sistema agora exige autenticacao para uso da aplicacao.
+
+Perfis disponiveis:
+
+- `admin`: acesso total ao sistema
+- `vendedor`: acesso operacional sem acesso ao Financeiro e com Fornecedores em modo somente leitura
+
+Credenciais iniciais padrao criadas automaticamente na migracao:
+
+```text
+admin / admin123
+vendedor / vendedor123
+```
+
+Se quiser, voce pode substituir esses valores pelas variaveis abaixo antes de iniciar o servidor pela primeira vez:
+
+```env
+DEFAULT_ADMIN_LOGIN=admin
+DEFAULT_ADMIN_PASSWORD=admin123
+DEFAULT_VENDEDOR_LOGIN=vendedor
+DEFAULT_VENDEDOR_PASSWORD=vendedor123
+```
+
 ## Visao geral
 
 O projeto combina:
@@ -146,6 +171,10 @@ Variaveis opcionais:
 ```env
 PORT=3000
 DB_PATH=./database/erp.db
+DEFAULT_ADMIN_LOGIN=admin
+DEFAULT_ADMIN_PASSWORD=admin123
+DEFAULT_VENDEDOR_LOGIN=vendedor
+DEFAULT_VENDEDOR_PASSWORD=vendedor123
 ```
 
 Se nenhuma configuracao for informada, o projeto usa esses valores padrao.

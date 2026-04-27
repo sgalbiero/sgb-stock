@@ -37,6 +37,10 @@
           <span class="nav-icon">📊</span>
           <span class="nav-label">Dashboard</span>
         </a>
+        <a href="#/vendas" class="nav-item" id="nav-vendas" data-page="vendas">
+          <span class="nav-icon">🛒</span>
+          <span class="nav-label">Vendas</span>
+        </a>
         <a href="#/produtos" class="nav-item" id="nav-produtos" data-page="produtos">
           <span class="nav-icon">📦</span>
           <span class="nav-label">Produtos</span>
@@ -49,10 +53,6 @@
           <span class="nav-icon">🏭</span>
           <span class="nav-label">Fornecedores</span>
         </a>
-        <a href="#/vendas" class="nav-item" id="nav-vendas" data-page="vendas">
-          <span class="nav-icon">🛒</span>
-          <span class="nav-label">Vendas</span>
-        </a>
         <a href="#/financeiro" class="nav-item" id="nav-financeiro" data-page="financeiro">
           <span class="nav-icon">💰</span>
           <span class="nav-label">Financeiro</span>
@@ -60,9 +60,25 @@
       </nav>
 
       <div class="sidebar-footer">
+        <a href="#/historico" class="nav-item hidden" id="nav-historico" data-page="historico">
+          <span class="nav-icon">🕘</span>
+          <span class="nav-label">Histórico</span>
+        </a>
+        <a href="#/configuracoes" class="nav-item hidden" id="nav-configuracoes" data-page="configuracoes">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-label">Configurações</span>
+        </a>
+        <div class="sidebar-user hidden" id="sidebar-user">
+          <span class="sidebar-user-name" id="sidebar-user-name"></span>
+          <span class="sidebar-user-role" id="sidebar-user-role"></span>
+        </div>
         <button class="theme-toggle" id="theme-toggle" title="Alternar modo claro/escuro">
           <span class="theme-icon">🌙</span>
           <span class="nav-label theme-label">Modo Claro</span>
+        </button>
+        <button class="theme-toggle hidden" id="logout-btn" title="Sair">
+          <span class="theme-icon">🚪</span>
+          <span class="nav-label theme-label">Sair</span>
         </button>
         <span class="version-label">v1.0 — Loja Familiar</span>
       </div>
@@ -97,12 +113,15 @@
   <!-- Scripts -->
   <script src="/assets/js/utils.js"></script>
   <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
   <script src="/pages/dashboard.js"></script>
   <script src="/pages/produtos.js"></script>
   <script src="/pages/clientes.js"></script>
   <script src="/pages/fornecedores.js"></script>
   <script src="/pages/vendas.js"></script>
   <script src="/pages/financeiro.js"></script>
+  <script src="/pages/historico.js"></script>
+  <script src="/pages/configuracoes.js"></script>
   <script src="/assets/js/router.js"></script>
 </body>
 </html>

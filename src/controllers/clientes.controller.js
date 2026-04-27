@@ -1,4 +1,5 @@
 const db = require('../../database/db');
+const { registrarEvento } = require('../services/audit.service');
 
 function montarHistoricoPaginado(clienteId, page = 1, pageSize = 5) {
   const paginaAtual = Math.max(1, Number.parseInt(page, 10) || 1);
@@ -116,6 +117,15 @@ exports.criar = (req, res, next) => {
 
     const stmt = db.prepare('INSERT INTO clientes (nome, telefone, endereco, bairro, cidade, cep) VALUES (?, ?, ?, ?, ?, ?)');
     const info = stmt.run(nome, telefone, endereco, bairro, cidade, cep);
+
+    registrarEvento(req, {
+      acao: 'cliente.criado',
+      entidade: 'cliente',
+      entidadeId: info.lastInsertRowid,
+      descricao: `Cliente ${nome} cadastrado`,
+      detalhes: { telefone, cidade },
+    });
+
     res.status(201).json({ id: info.lastInsertRowid, mensagem: 'Cliente criado com sucesso' });
   } catch (error) {
     next(error);
@@ -131,6 +141,15 @@ exports.atualizar = (req, res, next) => {
     const info = stmt.run(nome, telefone, endereco, bairro, cidade, cep, req.params.id);
     
     if (info.changes === 0) return res.status(404).json({ error: 'Cliente não encontrado' });
+
+    registrarEvento(req, {
+      acao: 'cliente.atualizado',
+      entidade: 'cliente',
+      entidadeId: Number(req.params.id),
+      descricao: `Cliente ${nome} atualizado`,
+      detalhes: { telefone, cidade },
+    });
+
     res.json({ mensagem: 'Cliente atualizado com sucesso' });
   } catch (error) {
     next(error);

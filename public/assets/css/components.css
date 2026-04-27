@@ -256,6 +256,140 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   margin-top: 8px;
 }
 
+/* --- Finance charts --- */
+.chart-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+}
+
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.chart-dot.receitas { background: var(--success); }
+.chart-dot.despesas { background: var(--danger); }
+.chart-dot.lucro { background: var(--info); }
+
+.chart-wrap {
+  position: relative;
+  overflow-x: auto;
+}
+
+.chart-caption {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.chart-svg {
+  width: 100%;
+  min-width: 680px;
+  height: 260px;
+  display: block;
+}
+
+.chart-grid-line {
+  stroke: var(--border-light);
+  stroke-width: 1;
+  stroke-dasharray: 4 6;
+  opacity: 0.6;
+}
+
+.chart-axis-label {
+  fill: var(--text-faint);
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-line.receitas { stroke: var(--success); }
+.chart-line.despesas { stroke: var(--danger); }
+.chart-line.lucro { stroke: var(--info); }
+
+.chart-point {
+  stroke: var(--bg-card);
+  stroke-width: 2;
+}
+
+.chart-point.receitas { fill: var(--success); }
+.chart-point.despesas { fill: var(--danger); }
+.chart-point.lucro { fill: var(--info); }
+
+.chart-labels {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-align: center;
+}
+
+.chart-tooltip {
+  position: absolute;
+  min-width: 160px;
+  max-width: 200px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translateY(-100%);
+  z-index: 3;
+}
+
+.chart-tooltip.hidden {
+  display: none;
+}
+
+.chart-tooltip strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.chart-tooltip span {
+  display: block;
+  color: var(--text-muted);
+}
+
 /* --- WhatsApp icon --- */
 .wa-link {
   color: #25d366;
