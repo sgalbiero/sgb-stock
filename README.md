@@ -62,6 +62,9 @@ O projeto combina:
 - clientes com historico de pedidos
 - fornecedores vinculados aos produtos
 - financeiro integrado ao fluxo de vendas
+- autenticacao por sessao com perfis `admin` e `vendedor`
+- configuracoes administrativas para usuarios, categorias financeiras e locais de estoque
+- historico de auditoria por usuario
 
 ## Principais recursos
 
@@ -81,6 +84,7 @@ O projeto combina:
 - protecao contra venda acima do estoque disponivel
 - status de pagamento: `pago` e `aguardando_pagamento`
 - marcacao posterior de venda como paga
+- vinculacao posterior de cliente em vendas avulsas ja confirmadas
 - cancelamento com reposicao automatica de estoque
 
 ### Clientes
@@ -100,7 +104,23 @@ O projeto combina:
 - lancamentos manuais
 - receitas geradas automaticamente por vendas
 - sincronizacao com status de pagamento
-- visao de saldo e fluxo por periodo
+- visao diaria por padrao com filtros por periodo
+- indicadores de lucratividade e desempenho por produto
+- edicao de lancamentos manuais
+- despesas fixas recorrentes com vencimento, geracao automatica e marcacao como paga
+- alertas de contas proximas do vencimento e em atraso no dashboard
+
+### Configuracoes
+
+- gestao de usuarios do sistema por administradores
+- cadastro de tipos de lancamentos financeiros
+- cadastro e manutencao de locais de estoque
+
+### Historico
+
+- auditoria de interacoes relevantes por usuario
+- filtros por termo, entidade, acao e periodo
+- exportacao CSV para consulta externa
 
 ## Stack
 
@@ -183,12 +203,14 @@ Se nenhuma configuracao for informada, o projeto usa esses valores padrao.
 
 Rotas principais expostas pelo servidor:
 
+- `/api/auth`
 - `/api/produtos`
 - `/api/clientes`
 - `/api/fornecedores`
 - `/api/vendas`
 - `/api/financeiro`
 - `/api/locais`
+- `/api/historico`
 
 ## Objetivo do projeto
 
