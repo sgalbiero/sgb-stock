@@ -4,6 +4,15 @@ const PageVendas = (() => {
 
   let _vendas = [];
 
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function badgeStatusVenda(status) {
     return status === 'concluida' ? 'badge-green' : 'badge-red';
   }
@@ -106,6 +115,7 @@ const PageVendas = (() => {
         <td>
           <div class="action-btns">
             <button class="btn btn-ghost btn-sm" onclick="PageVendas.verDetalhe(${v.id})" title="Ver detalhe">👁️</button>
+            <button class="btn btn-ghost btn-sm" onclick="PageVendas.exportarPedidoPdf(${v.id})" title="Exportar pedido em PDF">📄</button>
             ${v.status === 'concluida' && v.status_pagamento !== 'pago' ? `<button class="btn btn-ghost btn-sm" onclick="PageVendas.marcarComoPaga(${v.id})" title="Marcar como paga">✅</button>` : ''}
             ${v.status === 'concluida' ? `<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="PageVendas.cancelar(${v.id})" title="Cancelar">❌</button>` : ''}
           </div>
@@ -633,10 +643,219 @@ const PageVendas = (() => {
         toast(`Venda #${r.id} realizada com sucesso! 🎉`, 'success');
         Modal.close();
         await carregar();
+        await verDetalhe(r.id);
       } catch(err) {
         toast('Erro: ' + err.message, 'error');
       }
     });
+  }
+
+  function montarHtmlPedido(venda) {
+    const linhasItens = (venda.itens || []).map(item => `
+      <tr>
+        <td>${escapeHtml(item.produto_nome)}</td>
+        <td>${escapeHtml(`Tam ${item.tamanho} · ${item.cor}`)}</td>
+        <td style="text-align:center">${item.quantidade}</td>
+        <td style="text-align:right">${escapeHtml(Utils.moeda(item.preco_unit))}</td>
+        <td style="text-align:right">${escapeHtml(Utils.moeda(item.preco_unit * item.quantidade))}</td>
+      </tr>
+    `).join('');
+
+    return `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Pedido #${venda.id}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            background: #f4f0e8;
+            color: #1f2937;
+            font-family: "Segoe UI", Arial, sans-serif;
+          }
+          .sheet {
+            max-width: 820px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 40px;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            gap: 24px;
+            align-items: flex-start;
+            border-bottom: 2px solid #111827;
+            padding-bottom: 20px;
+            margin-bottom: 24px;
+          }
+          .title {
+            margin: 0;
+            font-size: 28px;
+            line-height: 1.1;
+          }
+          .subtitle {
+            margin: 8px 0 0;
+            color: #6b7280;
+            font-size: 13px;
+          }
+          .meta {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(180px, 1fr));
+            gap: 12px 20px;
+            margin-bottom: 24px;
+            font-size: 14px;
+          }
+          .meta strong {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #6b7280;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+          }
+          thead th {
+            text-align: left;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+            padding: 10px 8px;
+            border-bottom: 1px solid #d1d5db;
+          }
+          tbody td {
+            padding: 12px 8px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 14px;
+          }
+          .totais {
+            margin-top: 20px;
+            margin-left: auto;
+            width: 320px;
+          }
+          .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 14px;
+          }
+          .total-row.grand {
+            border-bottom: 0;
+            padding-top: 14px;
+            font-size: 18px;
+            font-weight: 700;
+          }
+          .observacoes {
+            margin-top: 28px;
+            padding: 16px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 14px;
+            white-space: pre-wrap;
+          }
+          .footer {
+            margin-top: 28px;
+            color: #6b7280;
+            font-size: 12px;
+            text-align: center;
+          }
+          @media print {
+            body { background: #ffffff; }
+            .sheet { max-width: none; padding: 24px; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="sheet">
+          <div class="header">
+            <div>
+              <h1 class="title">Pedido #${venda.id}</h1>
+              <p class="subtitle">Documento pronto para salvar em PDF e enviar ao cliente.</p>
+            </div>
+            <div style="text-align:right;font-size:13px;color:#6b7280">
+              <div><strong>Emitido em:</strong> ${escapeHtml(Utils.dataHora(new Date().toISOString()))}</div>
+              <div style="margin-top:6px"><strong>Status:</strong> ${escapeHtml(venda.status)}</div>
+            </div>
+          </div>
+
+          <div class="meta">
+            <div>
+              <strong>Cliente</strong>
+              <span>${escapeHtml(venda.cliente_nome || 'Avulso')}</span>
+            </div>
+            <div>
+              <strong>Data do pedido</strong>
+              <span>${escapeHtml(Utils.dataHora(venda.criado_em))}</span>
+            </div>
+            <div>
+              <strong>Forma de pagamento</strong>
+              <span>${escapeHtml(Utils.formaPagamentoLabel(venda.forma_pagamento))}</span>
+            </div>
+            <div>
+              <strong>Situação do pagamento</strong>
+              <span>${escapeHtml(labelStatusPagamento(venda.status_pagamento))}</span>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Produto</th>
+                <th>Variação</th>
+                <th style="text-align:center">Qtd</th>
+                <th style="text-align:right">Preço unit.</th>
+                <th style="text-align:right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${linhasItens}
+            </tbody>
+          </table>
+
+          <div class="totais">
+            <div class="total-row"><span>Subtotal</span><strong>${escapeHtml(Utils.moeda((venda.itens || []).reduce((sum, item) => sum + (item.preco_unit * item.quantidade), 0)))}</strong></div>
+            ${venda.desconto > 0 ? `<div class="total-row"><span>Desconto</span><strong>- ${escapeHtml(Utils.moeda(venda.desconto))}</strong></div>` : ''}
+            <div class="total-row grand"><span>Total</span><span>${escapeHtml(Utils.moeda(venda.total))}</span></div>
+          </div>
+
+          ${venda.observacoes ? `<div class="observacoes"><strong>Observações</strong><div style="margin-top:8px">${escapeHtml(venda.observacoes)}</div></div>` : ''}
+
+          <div class="footer">SGB Stock</div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  async function exportarPedidoPdf(id) {
+    try {
+      const venda = await API.vendas.obter(id);
+      const popup = window.open('', '_blank', 'width=900,height=700');
+      if (!popup) {
+        toast('O navegador bloqueou a janela de exportação. Libere pop-ups e tente novamente.', 'error');
+        return;
+      }
+
+      popup.document.open();
+      popup.document.write(montarHtmlPedido(venda));
+      popup.document.close();
+      popup.focus();
+
+      popup.addEventListener('load', () => {
+        popup.print();
+      }, { once: true });
+    } catch (e) {
+      toast('Erro ao exportar pedido: ' + e.message, 'error');
+    }
   }
 
   // Ver detalhe
@@ -674,13 +893,13 @@ const PageVendas = (() => {
           <div class="cart-total-row grand"><span>TOTAL:</span><span>${Utils.moeda(v.total)}</span></div>
         </div>
         ${v.observacoes ? `<p style="margin-top:12px;color:var(--text-muted);font-size:13px">📝 ${v.observacoes}</p>` : ''}
-        ${v.status === 'concluida' ? `
-          <div class="form-actions" style="margin-top:16px">
+        <div class="form-actions" style="margin-top:16px">
+          <button class="btn btn-outline" onclick="PageVendas.exportarPedidoPdf(${v.id})">📄 Exportar PDF</button>
+          ${v.status === 'concluida' ? `
             ${!v.cliente_id ? `<button class="btn btn-outline" onclick="PageVendas.vincularCliente(${v.id})">👤 Vincular Cliente</button>` : ''}
             ${v.status_pagamento !== 'pago' ? `<button class="btn btn-success" onclick="PageVendas.marcarComoPaga(${v.id})">✅ Marcar como Paga</button>` : ''}
-            <button class="btn btn-danger" onclick="PageVendas.cancelar(${v.id})">❌ Cancelar Esta Venda</button>
-          </div>` : ''
-        }
+            <button class="btn btn-danger" onclick="PageVendas.cancelar(${v.id})">❌ Cancelar Esta Venda</button>` : ''}
+        </div>
       `);
     } catch(e) {
       toast('Erro ao carregar detalhe.', 'error');
@@ -762,5 +981,5 @@ const PageVendas = (() => {
     }
   }
 
-  return { render, verDetalhe, cancelar, marcarComoPaga, vincularCliente };
+  return { render, verDetalhe, cancelar, marcarComoPaga, vincularCliente, exportarPedidoPdf };
 })();
