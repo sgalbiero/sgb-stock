@@ -248,6 +248,53 @@ const PageFinanceiro = (() => {
     }).join(' ');
   }
 
+  function _criarGraficoPontoUnico(ponto, largura, altura, padding, maxValor, agrupamento) {
+    const barras = [
+      { chave: 'receitas', rotulo: 'Receitas', classe: 'receitas', valor: Number(ponto.receitas) || 0 },
+      { chave: 'despesas', rotulo: 'Despesas', classe: 'despesas', valor: Number(ponto.despesas) || 0 },
+      { chave: 'lucro', rotulo: 'Lucro', classe: 'lucro', valor: Number(ponto.lucro) || 0 },
+    ];
+    const baseY = altura - padding;
+    const areaAltura = altura - padding * 2;
+    const larguraBarra = 96;
+    const gap = 54;
+    const larguraTotal = barras.length * larguraBarra + (barras.length - 1) * gap;
+    const xInicial = (largura - larguraTotal) / 2;
+
+    return `
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-legend">
+            <span class="chart-legend-item"><span class="chart-dot receitas"></span>Receitas</span>
+            <span class="chart-legend-item"><span class="chart-dot despesas"></span>Despesas</span>
+            <span class="chart-legend-item"><span class="chart-dot lucro"></span>Lucro</span>
+          </div>
+          <div class="chart-caption">Agrupamento ${agrupamento === 'diario' ? 'diário' : agrupamento === 'semanal' ? 'semanal' : 'mensal'} · período com um único ponto</div>
+        </div>
+        <div class="chart-wrap">
+          <svg class="chart-svg" viewBox="0 0 ${largura} ${altura}" role="img" aria-label="Gráfico de receitas, despesas e lucro por período">
+            <line x1="${padding}" y1="${baseY}" x2="${largura - padding}" y2="${baseY}" class="chart-grid-line"></line>
+            ${barras.map((barra, indice) => {
+              const alturaBarra = (barra.valor / maxValor) * areaAltura;
+              const x = xInicial + indice * (larguraBarra + gap);
+              const y = baseY - alturaBarra;
+              return `
+                <g>
+                  <rect x="${x}" y="${y}" width="${larguraBarra}" height="${Math.max(alturaBarra, 4)}" rx="14" class="chart-bar ${barra.classe}"></rect>
+                  <text x="${x + larguraBarra / 2}" y="${Math.max(y - 10, padding)}" text-anchor="middle" class="chart-axis-label">${Utils.moeda(barra.valor)}</text>
+                  <text x="${x + larguraBarra / 2}" y="${baseY + 18}" text-anchor="middle" class="chart-axis-label">${barra.rotulo}</text>
+                </g>
+              `;
+            }).join('')}
+          </svg>
+        </div>
+        <div class="chart-labels">
+          <span>${ponto.label || Utils.data(ponto.data)}</span>
+        </div>
+      </div>
+    `;
+  }
+
   async function carregarGraficoPeriodo() {
     const { inicio, fim } = _periodoAtual();
     const agrupamento = _agrupamentoAtual();
@@ -266,6 +313,12 @@ const PageFinanceiro = (() => {
       const altura = 260;
       const padding = 24;
       const maxValor = _normalizarPontosSerie(pontos);
+
+      if (pontos.length === 1) {
+        el.innerHTML = _criarGraficoPontoUnico(pontos[0], largura, altura, padding, maxValor, agrupamento);
+        return;
+      }
+
       const receitasPoints = _criarPolyline(pontos, 'receitas', largura, altura, padding, maxValor);
       const despesasPoints = _criarPolyline(pontos, 'despesas', largura, altura, padding, maxValor);
       const lucroPoints = _criarPolyline(pontos, 'lucro', largura, altura, padding, maxValor);

@@ -340,6 +340,10 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .chart-line.despesas { stroke: var(--danger); }
 .chart-line.lucro { stroke: var(--info); }
 
+.chart-bar.receitas { fill: var(--success); }
+.chart-bar.despesas { fill: var(--danger); }
+.chart-bar.lucro { fill: var(--info); }
+
 .chart-point {
   stroke: var(--bg-card);
   stroke-width: 2;

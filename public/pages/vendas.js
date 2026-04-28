@@ -64,6 +64,15 @@ const PageVendas = (() => {
     return 'todas as vendas';
   }
 
+  function atualizarBotoesPeriodo(periodoAtivo) {
+    document.querySelectorAll('[data-periodo-venda]').forEach(botao => {
+      const ativo = botao.dataset.periodoVenda === periodoAtivo;
+      botao.classList.toggle('btn-primary', ativo);
+      botao.classList.toggle('btn-outline', !ativo);
+      botao.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+    });
+  }
+
   function atualizarResumoFiltros({ periodo, data, pagto, statusPagamento, totalItens }) {
     const el = document.getElementById('resumo-filtros-vendas');
     if (!el) return;
@@ -83,6 +92,11 @@ const PageVendas = (() => {
       partes.push(`Pagamento: <strong>${labelStatusPagamento(statusPagamento)}</strong>`);
     }
 
+    const statusVenda = document.getElementById('filtro-venda-status')?.value;
+    if (statusVenda) {
+      partes.push(`Status: <strong>${statusVenda === 'concluida' ? 'Concluída' : 'Cancelada'}</strong>`);
+    }
+
     partes.push(`<strong>${totalItens}</strong> venda(s)`);
 
     el.innerHTML = partes.join(' · ');
@@ -92,21 +106,78 @@ const PageVendas = (() => {
     const el = document.getElementById('resumo-valores-vendas');
     if (!el) return;
 
-    const totalVendido = lista.reduce((sum, venda) => sum + Number(venda.total || 0), 0);
-    const totalPendente = lista
+    const vendasConcluidas = lista.filter(venda => venda.status === 'concluida');
+    const totalVendido = vendasConcluidas.reduce((sum, venda) => sum + Number(venda.total || 0), 0);
+    const totalPendente = vendasConcluidas
       .filter(venda => venda.status_pagamento === 'aguardando_pagamento')
       .reduce((sum, venda) => sum + Number(venda.total || 0), 0);
+    const totalCanceladas = lista.filter(venda => venda.status === 'cancelada').length;
 
     el.innerHTML = `
       <div class="card" style="padding:12px 14px;min-width:180px">
-        <div style="font-size:12px;color:var(--text-muted)">Total no filtro</div>
+        <div style="font-size:12px;color:var(--text-muted)">Total concluído no filtro</div>
         <div style="font-size:20px;font-weight:700">${Utils.moeda(totalVendido)}</div>
       </div>
       <div class="card" style="padding:12px 14px;min-width:180px">
         <div style="font-size:12px;color:var(--text-muted)">Pendente no filtro</div>
         <div style="font-size:20px;font-weight:700;color:var(--warning)">${Utils.moeda(totalPendente)}</div>
       </div>
+      <div class="card" style="padding:12px 14px;min-width:180px">
+        <div style="font-size:12px;color:var(--text-muted)">Canceladas no filtro</div>
+        <div style="font-size:20px;font-weight:700;color:var(--danger)">${totalCanceladas}</div>
+      </div>
     `;
+  }
+
+  function montarMensagemWhatsAppPedido(venda) {
+    return [
+      `Olá${venda.cliente_nome ? `, ${venda.cliente_nome}` : ''}!`,
+      `Segue o pedido #${venda.id}.`,
+      `Total: ${Utils.moeda(venda.total)}.`,
+      'Vou enviar o PDF do pedido por aqui.'
+    ].join(' ');
+  }
+
+  function montarResumoPedidoTexto(venda) {
+    const itens = (venda.itens || []).map(item => (
+      `- ${item.produto_nome} | Tam ${item.tamanho} | ${item.cor} | Qtd ${item.quantidade} | ${Utils.moeda(item.preco_unit * item.quantidade)}`
+    )).join('\n');
+
+    return [
+      `Pedido #${venda.id}`,
+      `Cliente: ${venda.cliente_nome || 'Avulso'}`,
+      `Data: ${Utils.dataHora(venda.criado_em)}`,
+      `Pagamento: ${Utils.formaPagamentoLabel(venda.forma_pagamento)} (${labelStatusPagamento(venda.status_pagamento)})`,
+      '',
+      'Itens:',
+      itens || '- Sem itens detalhados',
+      '',
+      `Total: ${Utils.moeda(venda.total)}`,
+      venda.observacoes ? `Observações: ${venda.observacoes}` : ''
+    ].filter(Boolean).join('\n');
+  }
+
+  async function copiarResumoPedido(id) {
+    try {
+      const venda = await API.vendas.obter(id);
+      const texto = montarResumoPedidoTexto(venda);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(texto);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = texto;
+        textarea.setAttribute('readonly', 'true');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        textarea.remove();
+      }
+      toast('Resumo do pedido copiado.', 'success');
+    } catch (e) {
+      toast('Não foi possível copiar o resumo do pedido.', 'error');
+    }
   }
 
   async function render(container) {
@@ -120,12 +191,13 @@ const PageVendas = (() => {
       </div>
 
       <div class="toolbar">
-        <select class="form-control" id="filtro-venda-periodo" style="max-width:180px">
-          <option value="hoje" selected>Hoje</option>
-          <option value="semana">Essa semana</option>
-          <option value="mes">Esse mês</option>
-          <option value="todas">Todas</option>
-        </select>
+        <input type="hidden" id="filtro-venda-periodo" value="hoje" />
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn btn-primary" data-periodo-venda="hoje" aria-pressed="true">Hoje</button>
+          <button type="button" class="btn btn-outline" data-periodo-venda="semana" aria-pressed="false">Essa semana</button>
+          <button type="button" class="btn btn-outline" data-periodo-venda="mes" aria-pressed="false">Esse mês</button>
+          <button type="button" class="btn btn-outline" data-periodo-venda="todas" aria-pressed="false">Todas</button>
+        </div>
         <input class="search-input" id="filtro-venda-data" type="date" value="" style="max-width:170px" />
         <input class="search-input" id="filtro-venda-busca" type="text" placeholder="Pedido, cliente ou observação" style="min-width:240px;flex:1" />
         <select class="form-control" id="filtro-venda-pagamento" style="max-width:170px">
@@ -135,6 +207,11 @@ const PageVendas = (() => {
           <option value="credito">Crédito</option>
           <option value="pix">Pix</option>
           <option value="misto">Misto</option>
+        </select>
+        <select class="form-control" id="filtro-venda-status" style="max-width:170px">
+          <option value="">Todo status</option>
+          <option value="concluida">Concluída</option>
+          <option value="cancelada">Cancelada</option>
         </select>
         <select class="form-control" id="filtro-venda-status-pagamento" style="max-width:220px">
           <option value="">Todo pagamento</option>
@@ -158,24 +235,34 @@ const PageVendas = (() => {
     `;
 
     document.getElementById('btn-nova-venda').addEventListener('click', abrirNovaVenda);
-    document.getElementById('filtro-venda-periodo').addEventListener('change', () => {
-      document.getElementById('filtro-venda-data').value = '';
-      aplicarFiltros();
+    atualizarBotoesPeriodo('hoje');
+    document.querySelectorAll('[data-periodo-venda]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        const periodo = botao.dataset.periodoVenda;
+        document.getElementById('filtro-venda-periodo').value = periodo;
+        document.getElementById('filtro-venda-data').value = '';
+        atualizarBotoesPeriodo(periodo);
+        aplicarFiltros();
+      });
     });
     document.getElementById('filtro-venda-data').addEventListener('change', () => {
       if (document.getElementById('filtro-venda-data').value) {
         document.getElementById('filtro-venda-periodo').value = 'todas';
+        atualizarBotoesPeriodo('todas');
       }
       aplicarFiltros();
     });
     document.getElementById('filtro-venda-busca').addEventListener('input', aplicarFiltros);
     document.getElementById('filtro-venda-pagamento').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-venda-status').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-venda-status-pagamento').addEventListener('change', aplicarFiltros);
     document.getElementById('btn-limpar-filtros').addEventListener('click', () => {
       document.getElementById('filtro-venda-periodo').value = 'hoje';
+      atualizarBotoesPeriodo('hoje');
       document.getElementById('filtro-venda-data').value = '';
       document.getElementById('filtro-venda-busca').value = '';
       document.getElementById('filtro-venda-pagamento').value = '';
+      document.getElementById('filtro-venda-status').value = '';
       document.getElementById('filtro-venda-status-pagamento').value = '';
       aplicarFiltros();
     });
@@ -197,6 +284,7 @@ const PageVendas = (() => {
     const data = document.getElementById('filtro-venda-data')?.value;
     const busca = document.getElementById('filtro-venda-busca')?.value.trim().toLowerCase();
     const pagto = document.getElementById('filtro-venda-pagamento')?.value;
+    const statusVenda = document.getElementById('filtro-venda-status')?.value;
     const statusPagamento = document.getElementById('filtro-venda-status-pagamento')?.value;
     let lista = [..._vendas];
 
@@ -225,6 +313,7 @@ const PageVendas = (() => {
     }
 
     if (pagto) lista = lista.filter(v => v.forma_pagamento === pagto);
+    if (statusVenda) lista = lista.filter(v => v.status === statusVenda);
     if (statusPagamento) lista = lista.filter(v => v.status_pagamento === statusPagamento);
     atualizarResumoFiltros({ periodo, data, pagto, statusPagamento, totalItens: lista.length });
     atualizarResumoValores(lista);
@@ -754,6 +843,8 @@ const PageVendas = (() => {
 
     // Confirmar venda
     document.getElementById('btn-confirmar-venda').addEventListener('click', async () => {
+      const botaoConfirmar = document.getElementById('btn-confirmar-venda');
+      if (botaoConfirmar.disabled) return;
       if (!carrinho.length) { toast('Adicione ao menos um item.', 'info'); return; }
       const desc = parseFloat(document.getElementById('venda-desconto').value) || 0;
       const sub = carrinho.reduce((s, i) => s + i.preco * i.qtd, 0);
@@ -773,6 +864,8 @@ const PageVendas = (() => {
         }))
       };
       try {
+        botaoConfirmar.disabled = true;
+        botaoConfirmar.textContent = 'Salvando...';
         const r = await API.vendas.criar(dados);
         toast(`Venda #${r.id} realizada com sucesso! 🎉`, 'success');
         Modal.close();
@@ -780,6 +873,11 @@ const PageVendas = (() => {
         await verDetalhe(r.id);
       } catch(err) {
         toast('Erro: ' + err.message, 'error');
+      } finally {
+        if (document.body.contains(botaoConfirmar)) {
+          botaoConfirmar.disabled = false;
+          botaoConfirmar.textContent = '✅ Confirmar Venda';
+        }
       }
     });
   }
@@ -926,6 +1024,11 @@ const PageVendas = (() => {
               <strong>Cliente</strong>
               <span>${escapeHtml(venda.cliente_nome || 'Avulso')}</span>
             </div>
+            ${venda.cliente_telefone ? `
+            <div>
+              <strong>Telefone</strong>
+              <span>${escapeHtml(venda.cliente_telefone)}</span>
+            </div>` : ''}
             <div>
               <strong>Data do pedido</strong>
               <span>${escapeHtml(Utils.dataHora(venda.criado_em))}</span>
@@ -970,8 +1073,14 @@ const PageVendas = (() => {
     `;
   }
 
-  async function abrirPedidoParaImpressao(id, { autoPrint = false } = {}) {
+  async function abrirPedidoParaImpressao(id, { autoPrint = false, triggerButton = null } = {}) {
     try {
+      if (triggerButton?.disabled) return;
+      if (triggerButton) {
+        triggerButton.disabled = true;
+        triggerButton.textContent = autoPrint ? 'Gerando PDF...' : 'Abrindo...';
+      }
+
       const venda = await API.vendas.obter(id);
       const popup = window.open('', '_blank', 'width=900,height=700');
       if (!popup) {
@@ -991,11 +1100,16 @@ const PageVendas = (() => {
       }
     } catch (e) {
       toast('Erro ao exportar pedido: ' + e.message, 'error');
+    } finally {
+      if (triggerButton && document.body.contains(triggerButton)) {
+        triggerButton.disabled = false;
+        triggerButton.textContent = autoPrint ? '📄 Exportar PDF' : 'Abrir';
+      }
     }
   }
 
-  async function exportarPedidoPdf(id) {
-    return abrirPedidoParaImpressao(id, { autoPrint: true });
+  async function exportarPedidoPdf(id, triggerButton = null) {
+    return abrirPedidoParaImpressao(id, { autoPrint: true, triggerButton });
   }
 
   // Ver detalhe
@@ -1003,11 +1117,15 @@ const PageVendas = (() => {
     try {
       const v = await API.vendas.obter(id);
       const whatsappLink = Utils.whatsappLink(v.cliente_telefone);
+      const whatsappUrl = whatsappLink
+        ? `${whatsappLink}?text=${encodeURIComponent(montarMensagemWhatsAppPedido(v))}`
+        : null;
       Modal.open(`🛒 Venda #${v.id}`, `
         <div style="margin-bottom:16px">
           <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13.5px">
             <div><strong>Data:</strong> ${Utils.dataHora(v.criado_em)}</div>
             <div><strong>Cliente:</strong> ${v.cliente_nome || 'Avulso'}</div>
+            ${v.cliente_telefone ? `<div><strong>Telefone:</strong> ${v.cliente_telefone}</div>` : ''}
             <div><strong>Pagamento:</strong> ${Utils.formaPagamentoLabel(v.forma_pagamento)}</div>
             <div><strong>Situação:</strong> <span class="badge ${badgeStatusPagamento(v.status_pagamento)}">${labelStatusPagamento(v.status_pagamento)}</span></div>
             <div><strong>Status:</strong> <span class="badge ${badgeStatusVenda(v.status)}">${v.status}</span></div>
@@ -1035,9 +1153,9 @@ const PageVendas = (() => {
         </div>
         ${v.observacoes ? `<p style="margin-top:12px;color:var(--text-muted);font-size:13px">📝 ${v.observacoes}</p>` : ''}
         <div class="form-actions" style="margin-top:16px">
-          <button class="btn btn-outline" onclick="PageVendas.exportarPedidoPdf(${v.id})">📄 Exportar PDF</button>
-          <button class="btn btn-outline" onclick="PageVendas.abrirPedidoParaImpressao(${v.id})">🖨️ Abrir para Impressão</button>
-          ${whatsappLink ? `<a class="btn btn-success" href="${whatsappLink}" target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>` : ''}
+          <button class="btn btn-outline" onclick="PageVendas.exportarPedidoPdf(${v.id}, this)">📄 Exportar PDF</button>
+          <button class="btn btn-outline" onclick="PageVendas.copiarResumoPedido(${v.id})">📋 Copiar Resumo</button>
+          ${whatsappUrl ? `<a class="btn btn-success" href="${whatsappUrl}" target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>` : ''}
           ${v.status === 'concluida' ? `
             ${!v.cliente_id ? `<button class="btn btn-outline" onclick="PageVendas.vincularCliente(${v.id})">👤 Vincular Cliente</button>` : ''}
             ${v.status_pagamento !== 'pago' ? `<button class="btn btn-success" onclick="PageVendas.marcarComoPaga(${v.id})">✅ Marcar como Paga</button>` : ''}
@@ -1125,5 +1243,5 @@ const PageVendas = (() => {
     }
   }
 
-  return { render, verDetalhe, cancelar, marcarComoPaga, vincularCliente, exportarPedidoPdf, abrirPedidoParaImpressao };
+  return { render, verDetalhe, cancelar, marcarComoPaga, vincularCliente, exportarPedidoPdf, abrirPedidoParaImpressao, copiarResumoPedido };
 })();

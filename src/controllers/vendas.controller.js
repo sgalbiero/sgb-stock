@@ -5,6 +5,37 @@ function validarStatusPagamento(statusPagamento) {
   return ['pago', 'aguardando_pagamento'].includes(statusPagamento);
 }
 
+function obterDistribuicaoEstoque(variacaoId, quantidadeNecessaria) {
+  const saldos = db.prepare(`
+    SELECT e.local_id, e.quantidade, l.nome as local_nome
+    FROM estoque e
+    JOIN locais_estoque l ON l.id = e.local_id
+    WHERE e.variacao_id = ? AND e.quantidade > 0
+    ORDER BY CASE WHEN l.nome = 'Loja Principal' THEN 0 ELSE 1 END, e.quantidade DESC, e.local_id ASC
+  `).all(variacaoId);
+
+  const totalDisponivel = saldos.reduce((soma, saldo) => soma + saldo.quantidade, 0);
+  if (totalDisponivel < quantidadeNecessaria) {
+    throw new Error(`Estoque insuficiente para a variação ${variacaoId}. Disponível total: ${totalDisponivel}`);
+  }
+
+  let restante = quantidadeNecessaria;
+  const distribuicao = [];
+
+  for (const saldo of saldos) {
+    if (restante <= 0) break;
+    const quantidadeConsumida = Math.min(restante, saldo.quantidade);
+    distribuicao.push({
+      local_id: saldo.local_id,
+      local_nome: saldo.local_nome,
+      quantidade: quantidadeConsumida,
+    });
+    restante -= quantidadeConsumida;
+  }
+
+  return distribuicao;
+}
+
 exports.listar = (req, res, next) => {
   try {
     const vendas = db.prepare(`
@@ -53,12 +84,10 @@ exports.criar = (req, res, next) => {
     if (!total || !forma_pagamento) return res.status(400).json({ error: 'Total e forma de pagamento são obrigatórios' });
     if (!validarStatusPagamento(statusPagamento)) return res.status(400).json({ error: 'Status de pagamento inválido' });
 
-    const localPadrao = db.prepare("SELECT id FROM locais_estoque WHERE nome = 'Loja Principal' LIMIT 1").get();
-    if (!localPadrao) return res.status(500).json({ error: 'Local de estoque principal não configurado' });
-
     const transaction = db.transaction(() => {
-      // 1. Validar e baixar estoque
+      // 1. Validar estoque disponível em todos os locais e preparar a distribuição da baixa
       const updateEstoque = db.prepare('UPDATE estoque SET quantidade = quantidade - ? WHERE variacao_id = ? AND local_id = ? AND quantidade >= ?');
+      const distribuicoes = [];
       
       for (const item of itens) {
         // Obter custo atual para salvar o histórico
@@ -72,9 +101,14 @@ exports.criar = (req, res, next) => {
         if (!variacao) throw new Error(`Variação ${item.variacao_id} não encontrada`);
         item.custo_unit = variacao.custo;
 
-        const info = updateEstoque.run(item.quantidade, item.variacao_id, localPadrao.id, item.quantidade);
-        if (info.changes === 0) {
-          throw new Error(`Estoque insuficiente para a variação ${item.variacao_id} no local principal`);
+        const distribuicao = obterDistribuicaoEstoque(item.variacao_id, item.quantidade);
+        distribuicoes.push(distribuicao);
+
+        for (const movimento of distribuicao) {
+          const info = updateEstoque.run(movimento.quantidade, item.variacao_id, movimento.local_id, movimento.quantidade);
+          if (info.changes === 0) {
+            throw new Error(`Não foi possível reservar estoque da variação ${item.variacao_id} no local ${movimento.local_nome}`);
+          }
         }
       }
 
@@ -85,8 +119,13 @@ exports.criar = (req, res, next) => {
 
       // 3. Registrar itens da venda
       const insertItem = db.prepare('INSERT INTO venda_itens (venda_id, variacao_id, quantidade, preco_unit, custo_unit) VALUES (?, ?, ?, ?, ?)');
-      for (const item of itens) {
-        insertItem.run(vendaId, item.variacao_id, item.quantidade, item.preco_unit, item.custo_unit);
+      const insertMovimentoEstoque = db.prepare('INSERT INTO venda_item_estoque_movimentos (venda_item_id, local_id, quantidade) VALUES (?, ?, ?)');
+      for (const [index, item] of itens.entries()) {
+        const infoItem = insertItem.run(vendaId, item.variacao_id, item.quantidade, item.preco_unit, item.custo_unit);
+        const vendaItemId = Number(infoItem.lastInsertRowid);
+        for (const movimento of distribuicoes[index]) {
+          insertMovimentoEstoque.run(vendaItemId, movimento.local_id, movimento.quantidade);
+        }
       }
 
       // 4. Lançamento financeiro automático
@@ -199,17 +238,39 @@ exports.cancelar = (req, res, next) => {
     if (!venda) return res.status(404).json({ error: 'Venda não encontrada' });
     if (venda.status === 'cancelada') return res.status(400).json({ error: 'Venda já está cancelada' });
 
-    const localPadrao = db.prepare("SELECT id FROM locais_estoque WHERE nome = 'Loja Principal' LIMIT 1").get();
-
     const transaction = db.transaction(() => {
       // 1. Atualizar status da venda
       db.prepare("UPDATE vendas SET status = 'cancelada' WHERE id = ?").run(vendaId);
 
       // 2. Repor estoque
-      const itens = db.prepare('SELECT variacao_id, quantidade FROM venda_itens WHERE venda_id = ?').all(vendaId);
-      const updateEstoque = db.prepare('UPDATE estoque SET quantidade = quantidade + ? WHERE variacao_id = ? AND local_id = ?');
+      const itens = db.prepare('SELECT id, variacao_id, quantidade FROM venda_itens WHERE venda_id = ?').all(vendaId);
+      const upsertEstoque = db.prepare(`
+        INSERT INTO estoque (variacao_id, local_id, quantidade)
+        VALUES (?, ?, ?)
+        ON CONFLICT(variacao_id, local_id)
+        DO UPDATE SET quantidade = quantidade + excluded.quantidade
+      `);
+      const localPadrao = db.prepare("SELECT id FROM locais_estoque WHERE nome = 'Loja Principal' LIMIT 1").get();
+
       for (const item of itens) {
-        updateEstoque.run(item.quantidade, item.variacao_id, localPadrao.id);
+        const movimentos = db.prepare(`
+          SELECT local_id, quantidade
+          FROM venda_item_estoque_movimentos
+          WHERE venda_item_id = ?
+        `).all(item.id);
+
+        if (movimentos.length) {
+          for (const movimento of movimentos) {
+            upsertEstoque.run(item.variacao_id, movimento.local_id, movimento.quantidade);
+          }
+          continue;
+        }
+
+        if (!localPadrao) {
+          throw new Error('Não foi possível restaurar estoque: local padrão Loja Principal não encontrado');
+        }
+
+        upsertEstoque.run(item.variacao_id, localPadrao.id, item.quantidade);
       }
 
       // 3. Cancelar lançamento financeiro (deletar ou marcar cancelado)

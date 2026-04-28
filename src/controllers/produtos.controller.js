@@ -25,7 +25,13 @@ function listarProdutosPorStatus(ativo) {
   return db.prepare(`
     SELECT 
       p.*,
-      COALESCE(GROUP_CONCAT(f.nome, ' | '), '') as fornecedor_nomes
+      COALESCE(GROUP_CONCAT(f.nome, ' | '), '') as fornecedor_nomes,
+      COALESCE((
+        SELECT SUM(e.quantidade)
+        FROM produto_variacoes pv2
+        LEFT JOIN estoque e ON e.variacao_id = pv2.id
+        WHERE pv2.produto_id = p.id AND pv2.ativo = 1
+      ), 0) as estoque_total
     FROM produtos p
     LEFT JOIN produto_fornecedores pf ON pf.produto_id = p.id
     LEFT JOIN fornecedores f ON f.id = pf.fornecedor_id
@@ -154,6 +160,9 @@ exports.atualizar = (req, res, next) => {
 
     res.json({ mensagem: 'Produto atualizado com sucesso' });
   } catch (error) {
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return res.status(400).json({ error: 'SKU já cadastrado' });
+    }
     next(error);
   }
 };
@@ -243,16 +252,29 @@ exports.entradaEstoque = (req, res, next) => {
   try {
     const { local_id, quantidade } = req.body;
     const variacao_id = req.params.variacao_id;
-    if (!local_id || quantidade === undefined) return res.status(400).json({ error: 'Local e quantidade são obrigatórios' });
+    const localId = Number(local_id);
+    const quantidadeEntrada = Number(quantidade);
+
+    if (!local_id || quantidade === undefined) {
+      return res.status(400).json({ error: 'Local e quantidade são obrigatórios' });
+    }
+
+    if (!Number.isInteger(localId) || localId <= 0) {
+      return res.status(400).json({ error: 'Local de estoque inválido' });
+    }
+
+    if (!Number.isInteger(quantidadeEntrada) || quantidadeEntrada <= 0) {
+      return res.status(400).json({ error: 'A quantidade de entrada deve ser um inteiro maior que zero' });
+    }
 
     const transaction = db.transaction(() => {
       // Verifica se já existe o registro de estoque para este local
-      const existe = db.prepare('SELECT quantidade FROM estoque WHERE variacao_id = ? AND local_id = ?').get(variacao_id, local_id);
+      const existe = db.prepare('SELECT quantidade FROM estoque WHERE variacao_id = ? AND local_id = ?').get(variacao_id, localId);
       
       if (existe) {
-        db.prepare('UPDATE estoque SET quantidade = quantidade + ? WHERE variacao_id = ? AND local_id = ?').run(quantidade, variacao_id, local_id);
+        db.prepare('UPDATE estoque SET quantidade = quantidade + ? WHERE variacao_id = ? AND local_id = ?').run(quantidadeEntrada, variacao_id, localId);
       } else {
-        db.prepare('INSERT INTO estoque (variacao_id, local_id, quantidade) VALUES (?, ?, ?)').run(variacao_id, local_id, quantidade);
+        db.prepare('INSERT INTO estoque (variacao_id, local_id, quantidade) VALUES (?, ?, ?)').run(variacao_id, localId, quantidadeEntrada);
       }
     });
 
@@ -262,7 +284,7 @@ exports.entradaEstoque = (req, res, next) => {
       acao: 'estoque.entrada',
       entidade: 'estoque',
       descricao: `Entrada de estoque registrada para a variação #${variacao_id}`,
-      detalhes: { variacao_id: Number(variacao_id), local_id: Number(local_id), quantidade: Number(quantidade) },
+      detalhes: { variacao_id: Number(variacao_id), local_id: localId, quantidade: quantidadeEntrada },
     });
 
     res.json({ mensagem: 'Estoque atualizado com sucesso' });

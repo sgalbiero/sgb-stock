@@ -4,6 +4,18 @@ const PageProdutos = (() => {
 
   let _todos = [];
 
+  function classeEstoque(total) {
+    if (total <= 0) return 'badge-red';
+    if (total < 3) return 'badge-yellow';
+    return 'badge-green';
+  }
+
+  function rotuloEstoque(total) {
+    if (total <= 0) return 'Sem estoque';
+    if (total < 3) return 'Baixo estoque';
+    return `${total} un.`;
+  }
+
   function normalizarTexto(valor) {
     return (valor || '').toString().toLowerCase();
   }
@@ -22,11 +34,16 @@ const PageProdutos = (() => {
       </div>
       <div class="toolbar">
         <input class="search-input" id="busca-produto" type="text" placeholder="Buscar por nome, SKU ou fornecedor..." />
+        <select class="form-control" id="filtro-estoque-produto" style="max-width:190px">
+          <option value="">Todo estoque</option>
+          <option value="baixo">Baixo estoque</option>
+          <option value="sem">Sem estoque</option>
+        </select>
       </div>
       <div class="card">
         <div class="table-wrapper">
           <table>
-            <thead><tr><th>SKU</th><th>Nome</th><th>Fornecedores</th><th>Custo</th><th>Preço</th><th>Margem</th><th>Ações</th></tr></thead>
+            <thead><tr><th>SKU</th><th>Nome</th><th>Fornecedores</th><th>Estoque</th><th>Custo</th><th>Preço</th><th>Margem</th><th>Ações</th></tr></thead>
             <tbody id="tabela-produtos"></tbody>
           </table>
         </div>
@@ -36,6 +53,9 @@ const PageProdutos = (() => {
     document.getElementById('btn-novo-produto').addEventListener('click', () => abrirFormulario());
     document.getElementById('btn-produtos-excluidos').addEventListener('click', abrirProdutosExcluidos);
     document.getElementById('busca-produto').addEventListener('input', e => filtrar(e.target.value));
+    document.getElementById('filtro-estoque-produto').addEventListener('change', () => {
+      filtrar(document.getElementById('busca-produto').value);
+    });
 
     await carregar();
   }
@@ -51,17 +71,23 @@ const PageProdutos = (() => {
 
   function filtrar(termo) {
     const t = normalizarTexto(termo);
+    const filtroEstoque = document.getElementById('filtro-estoque-produto')?.value || '';
     renderTabela(_todos.filter(p =>
-      normalizarTexto(p.nome).includes(t) ||
+      (normalizarTexto(p.nome).includes(t) ||
       normalizarTexto(p.sku).includes(t) ||
-      normalizarTexto(p.fornecedor_nomes).includes(t)
+      normalizarTexto(p.fornecedor_nomes).includes(t)) &&
+      (
+        !filtroEstoque ||
+        (filtroEstoque === 'sem' && Number(p.estoque_total || 0) <= 0) ||
+        (filtroEstoque === 'baixo' && Number(p.estoque_total || 0) > 0 && Number(p.estoque_total || 0) < 3)
+      )
     ));
   }
 
   function renderTabela(lista) {
     const tbody = document.getElementById('tabela-produtos');
     if (!lista.length) {
-      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📦</div><p>Nenhum produto encontrado.</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📦</div><p>Nenhum produto encontrado.</p></div></td></tr>`;
       return;
     }
     tbody.innerHTML = lista.map(p => `
@@ -69,6 +95,7 @@ const PageProdutos = (() => {
         <td><code style="background:var(--bg-elevated);padding:2px 6px;border-radius:4px;font-size:12px">${p.sku}</code></td>
         <td><strong>${p.nome}</strong></td>
         <td>${p.fornecedor_nomes ? p.fornecedor_nomes.split(' | ').join(', ') : '<span style="color:var(--text-faint)">—</span>'}</td>
+        <td><span class="badge ${classeEstoque(Number(p.estoque_total || 0))}">${rotuloEstoque(Number(p.estoque_total || 0))}</span></td>
         <td>${Utils.moeda(p.custo)}</td>
         <td><strong>${Utils.moeda(p.preco)}</strong></td>
         <td><span class="badge badge-purple">${Utils.margem(p.custo, p.preco)}</span></td>
@@ -328,29 +355,36 @@ const PageProdutos = (() => {
 
     // Carregar locais de estoque
     try {
-      const locaisResp = await fetch('/api/locais');
-      if (locaisResp.ok) {
-        const locais = await locaisResp.json();
-        const sel = document.getElementById('est-local');
-        sel.innerHTML = '';
+      const locais = await API.locais.listar();
+      const sel = document.getElementById('est-local');
+      sel.innerHTML = '';
+
+      if (!locais.length) {
+        sel.innerHTML = '<option value="">Nenhum local cadastrado</option>';
+        sel.disabled = true;
+      } else {
         locais.forEach(l => {
           const op = document.createElement('option');
-          op.value = l.id; op.textContent = l.nome;
+          op.value = l.id;
+          op.textContent = l.nome;
           sel.appendChild(op);
         });
       }
-    } catch(e) { /* ignora, usa padrão */ }
-
-    // Fallback: se não carregou locais, adicionar opções padrão
-    const sel = document.getElementById('est-local');
-    if (sel && sel.options.length === 0) {
-      sel.innerHTML = '<option value="1">Loja Principal</option><option value="2">Depósito</option>';
+    } catch(e) {
+      const sel = document.getElementById('est-local');
+      sel.innerHTML = '<option value="">Erro ao carregar locais</option>';
+      sel.disabled = true;
+      toast('Não foi possível carregar os locais de estoque.', 'error');
     }
 
     document.getElementById('form-estoque').addEventListener('submit', async e => {
       e.preventDefault();
       const qtd = parseInt(document.getElementById('est-qtd').value);
       const localId = parseInt(document.getElementById('est-local').value);
+      if (!localId) {
+        toast('Selecione um local de estoque válido.', 'info');
+        return;
+      }
       try {
         await API.produtos.entradaEstoque(variacaoId, { local_id: localId, quantidade: qtd });
         toast(`${qtd} unidade(s) adicionada(s)!`, 'success');
@@ -394,7 +428,7 @@ const PageProdutos = (() => {
           sku_variacao: document.getElementById('var-sku').value,
         });
         toast('Variação adicionada!', 'success');
-        Modal.close();
+        await verEstoque(produtoId);
       } catch(err) {
         toast('Erro: ' + err.message, 'error');
       }
