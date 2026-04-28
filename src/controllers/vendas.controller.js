@@ -22,7 +22,7 @@ exports.listar = (req, res, next) => {
 exports.obter = (req, res, next) => {
   try {
     const venda = db.prepare(`
-      SELECT v.*, c.nome as cliente_nome 
+      SELECT v.*, c.nome as cliente_nome, c.telefone as cliente_telefone
       FROM vendas v
       LEFT JOIN clientes c ON v.cliente_id = c.id
       WHERE v.id = ?

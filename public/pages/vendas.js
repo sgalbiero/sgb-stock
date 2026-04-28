@@ -57,6 +57,58 @@ const PageVendas = (() => {
     return statusPagamento === 'pago' ? 'Pago' : 'Aguardando pagamento';
   }
 
+  function descricaoPeriodo(periodo) {
+    if (periodo === 'semana') return 'essa semana';
+    if (periodo === 'mes') return 'esse mês';
+    if (periodo === 'hoje') return 'hoje';
+    return 'todas as vendas';
+  }
+
+  function atualizarResumoFiltros({ periodo, data, pagto, statusPagamento, totalItens }) {
+    const el = document.getElementById('resumo-filtros-vendas');
+    if (!el) return;
+
+    const partes = [];
+    if (data) {
+      partes.push(`Data: <strong>${Utils.data(data)}</strong>`);
+    } else {
+      partes.push(`Período: <strong>${descricaoPeriodo(periodo)}</strong>`);
+    }
+
+    if (pagto) {
+      partes.push(`Forma: <strong>${Utils.formaPagamentoLabel(pagto)}</strong>`);
+    }
+
+    if (statusPagamento) {
+      partes.push(`Pagamento: <strong>${labelStatusPagamento(statusPagamento)}</strong>`);
+    }
+
+    partes.push(`<strong>${totalItens}</strong> venda(s)`);
+
+    el.innerHTML = partes.join(' · ');
+  }
+
+  function atualizarResumoValores(lista) {
+    const el = document.getElementById('resumo-valores-vendas');
+    if (!el) return;
+
+    const totalVendido = lista.reduce((sum, venda) => sum + Number(venda.total || 0), 0);
+    const totalPendente = lista
+      .filter(venda => venda.status_pagamento === 'aguardando_pagamento')
+      .reduce((sum, venda) => sum + Number(venda.total || 0), 0);
+
+    el.innerHTML = `
+      <div class="card" style="padding:12px 14px;min-width:180px">
+        <div style="font-size:12px;color:var(--text-muted)">Total no filtro</div>
+        <div style="font-size:20px;font-weight:700">${Utils.moeda(totalVendido)}</div>
+      </div>
+      <div class="card" style="padding:12px 14px;min-width:180px">
+        <div style="font-size:12px;color:var(--text-muted)">Pendente no filtro</div>
+        <div style="font-size:20px;font-weight:700;color:var(--warning)">${Utils.moeda(totalPendente)}</div>
+      </div>
+    `;
+  }
+
   async function render(container) {
     container.innerHTML = `
       <div class="page-header">
@@ -75,6 +127,7 @@ const PageVendas = (() => {
           <option value="todas">Todas</option>
         </select>
         <input class="search-input" id="filtro-venda-data" type="date" value="" style="max-width:170px" />
+        <input class="search-input" id="filtro-venda-busca" type="text" placeholder="Pedido, cliente ou observação" style="min-width:240px;flex:1" />
         <select class="form-control" id="filtro-venda-pagamento" style="max-width:170px">
           <option value="">Todas as formas</option>
           <option value="dinheiro">Dinheiro</option>
@@ -91,6 +144,9 @@ const PageVendas = (() => {
         <button class="btn btn-outline" id="btn-limpar-filtros">Limpar</button>
       </div>
 
+      <div id="resumo-filtros-vendas" style="margin:4px 0 14px;color:var(--text-muted);font-size:13px"></div>
+      <div id="resumo-valores-vendas" style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 14px"></div>
+
       <div class="card">
         <div class="table-wrapper">
           <table>
@@ -102,18 +158,23 @@ const PageVendas = (() => {
     `;
 
     document.getElementById('btn-nova-venda').addEventListener('click', abrirNovaVenda);
-    document.getElementById('filtro-venda-periodo').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-venda-periodo').addEventListener('change', () => {
+      document.getElementById('filtro-venda-data').value = '';
+      aplicarFiltros();
+    });
     document.getElementById('filtro-venda-data').addEventListener('change', () => {
       if (document.getElementById('filtro-venda-data').value) {
         document.getElementById('filtro-venda-periodo').value = 'todas';
       }
       aplicarFiltros();
     });
+    document.getElementById('filtro-venda-busca').addEventListener('input', aplicarFiltros);
     document.getElementById('filtro-venda-pagamento').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-venda-status-pagamento').addEventListener('change', aplicarFiltros);
     document.getElementById('btn-limpar-filtros').addEventListener('click', () => {
       document.getElementById('filtro-venda-periodo').value = 'hoje';
       document.getElementById('filtro-venda-data').value = '';
+      document.getElementById('filtro-venda-busca').value = '';
       document.getElementById('filtro-venda-pagamento').value = '';
       document.getElementById('filtro-venda-status-pagamento').value = '';
       aplicarFiltros();
@@ -134,6 +195,7 @@ const PageVendas = (() => {
   function aplicarFiltros() {
     const periodo = document.getElementById('filtro-venda-periodo')?.value || 'hoje';
     const data = document.getElementById('filtro-venda-data')?.value;
+    const busca = document.getElementById('filtro-venda-busca')?.value.trim().toLowerCase();
     const pagto = document.getElementById('filtro-venda-pagamento')?.value;
     const statusPagamento = document.getElementById('filtro-venda-status-pagamento')?.value;
     let lista = [..._vendas];
@@ -151,8 +213,21 @@ const PageVendas = (() => {
       }
     }
 
+    if (busca) {
+      lista = lista.filter(v => {
+        const termos = [
+          String(v.id || ''),
+          v.cliente_nome || '',
+          v.observacoes || ''
+        ].join(' ').toLowerCase();
+        return termos.includes(busca);
+      });
+    }
+
     if (pagto) lista = lista.filter(v => v.forma_pagamento === pagto);
     if (statusPagamento) lista = lista.filter(v => v.status_pagamento === statusPagamento);
+    atualizarResumoFiltros({ periodo, data, pagto, statusPagamento, totalItens: lista.length });
+    atualizarResumoValores(lista);
     renderTabela(lista);
   }
 
@@ -895,7 +970,7 @@ const PageVendas = (() => {
     `;
   }
 
-  async function exportarPedidoPdf(id) {
+  async function abrirPedidoParaImpressao(id, { autoPrint = false } = {}) {
     try {
       const venda = await API.vendas.obter(id);
       const popup = window.open('', '_blank', 'width=900,height=700');
@@ -909,18 +984,25 @@ const PageVendas = (() => {
       popup.document.close();
       popup.focus();
 
-      popup.addEventListener('load', () => {
-        popup.print();
-      }, { once: true });
+      if (autoPrint) {
+        popup.addEventListener('load', () => {
+          popup.print();
+        }, { once: true });
+      }
     } catch (e) {
       toast('Erro ao exportar pedido: ' + e.message, 'error');
     }
+  }
+
+  async function exportarPedidoPdf(id) {
+    return abrirPedidoParaImpressao(id, { autoPrint: true });
   }
 
   // Ver detalhe
   async function verDetalhe(id) {
     try {
       const v = await API.vendas.obter(id);
+      const whatsappLink = Utils.whatsappLink(v.cliente_telefone);
       Modal.open(`🛒 Venda #${v.id}`, `
         <div style="margin-bottom:16px">
           <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13.5px">
@@ -954,12 +1036,15 @@ const PageVendas = (() => {
         ${v.observacoes ? `<p style="margin-top:12px;color:var(--text-muted);font-size:13px">📝 ${v.observacoes}</p>` : ''}
         <div class="form-actions" style="margin-top:16px">
           <button class="btn btn-outline" onclick="PageVendas.exportarPedidoPdf(${v.id})">📄 Exportar PDF</button>
+          <button class="btn btn-outline" onclick="PageVendas.abrirPedidoParaImpressao(${v.id})">🖨️ Abrir para Impressão</button>
+          ${whatsappLink ? `<a class="btn btn-success" href="${whatsappLink}" target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>` : ''}
           ${v.status === 'concluida' ? `
             ${!v.cliente_id ? `<button class="btn btn-outline" onclick="PageVendas.vincularCliente(${v.id})">👤 Vincular Cliente</button>` : ''}
             ${v.status_pagamento !== 'pago' ? `<button class="btn btn-success" onclick="PageVendas.marcarComoPaga(${v.id})">✅ Marcar como Paga</button>` : ''}
             <button class="btn btn-danger" onclick="PageVendas.cancelar(${v.id})">❌ Cancelar Esta Venda</button>` : ''}
         </div>
       `);
+      document.querySelector('.modal-box').style.maxWidth = '920px';
     } catch(e) {
       toast('Erro ao carregar detalhe.', 'error');
     }
@@ -1040,5 +1125,5 @@ const PageVendas = (() => {
     }
   }
 
-  return { render, verDetalhe, cancelar, marcarComoPaga, vincularCliente, exportarPedidoPdf };
+  return { render, verDetalhe, cancelar, marcarComoPaga, vincularCliente, exportarPedidoPdf, abrirPedidoParaImpressao };
 })();
