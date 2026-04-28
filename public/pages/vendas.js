@@ -4,6 +4,38 @@ const PageVendas = (() => {
 
   let _vendas = [];
 
+  function formatarDataLocal(data) {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, '0');
+    const dia = String(data.getDate()).padStart(2, '0');
+    return `${ano}-${mes}-${dia}`;
+  }
+
+  function obterPeriodoAtual(periodo) {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    if (periodo === 'mes') {
+      const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      return { inicio: formatarDataLocal(inicio), fim: formatarDataLocal(hoje) };
+    }
+
+    if (periodo === 'semana') {
+      const inicio = new Date(hoje);
+      const diaSemana = inicio.getDay();
+      const diferenca = diaSemana === 0 ? -6 : 1 - diaSemana;
+      inicio.setDate(inicio.getDate() + diferenca);
+      return { inicio: formatarDataLocal(inicio), fim: formatarDataLocal(hoje) };
+    }
+
+    if (periodo === 'hoje') {
+      const data = formatarDataLocal(hoje);
+      return { inicio: data, fim: data };
+    }
+
+    return null;
+  }
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -36,7 +68,13 @@ const PageVendas = (() => {
       </div>
 
       <div class="toolbar">
-        <input class="search-input" id="filtro-venda-data" type="date" value="${Utils.hoje()}" style="max-width:170px" />
+        <select class="form-control" id="filtro-venda-periodo" style="max-width:180px">
+          <option value="hoje" selected>Hoje</option>
+          <option value="semana">Essa semana</option>
+          <option value="mes">Esse mês</option>
+          <option value="todas">Todas</option>
+        </select>
+        <input class="search-input" id="filtro-venda-data" type="date" value="" style="max-width:170px" />
         <select class="form-control" id="filtro-venda-pagamento" style="max-width:170px">
           <option value="">Todas as formas</option>
           <option value="dinheiro">Dinheiro</option>
@@ -64,14 +102,21 @@ const PageVendas = (() => {
     `;
 
     document.getElementById('btn-nova-venda').addEventListener('click', abrirNovaVenda);
-    document.getElementById('filtro-venda-data').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-venda-periodo').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-venda-data').addEventListener('change', () => {
+      if (document.getElementById('filtro-venda-data').value) {
+        document.getElementById('filtro-venda-periodo').value = 'todas';
+      }
+      aplicarFiltros();
+    });
     document.getElementById('filtro-venda-pagamento').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-venda-status-pagamento').addEventListener('change', aplicarFiltros);
     document.getElementById('btn-limpar-filtros').addEventListener('click', () => {
+      document.getElementById('filtro-venda-periodo').value = 'hoje';
       document.getElementById('filtro-venda-data').value = '';
       document.getElementById('filtro-venda-pagamento').value = '';
       document.getElementById('filtro-venda-status-pagamento').value = '';
-      renderTabela(_vendas);
+      aplicarFiltros();
     });
 
     await carregar();
@@ -87,11 +132,25 @@ const PageVendas = (() => {
   }
 
   function aplicarFiltros() {
+    const periodo = document.getElementById('filtro-venda-periodo')?.value || 'hoje';
     const data = document.getElementById('filtro-venda-data')?.value;
     const pagto = document.getElementById('filtro-venda-pagamento')?.value;
     const statusPagamento = document.getElementById('filtro-venda-status-pagamento')?.value;
     let lista = [..._vendas];
-    if (data) lista = lista.filter(v => v.criado_em && v.criado_em.startsWith(data));
+
+    if (data) {
+      lista = lista.filter(v => v.criado_em && v.criado_em.startsWith(data));
+    } else {
+      const intervalo = obterPeriodoAtual(periodo);
+      if (intervalo) {
+        lista = lista.filter(v => {
+          if (!v.criado_em) return false;
+          const dataVenda = v.criado_em.slice(0, 10);
+          return dataVenda >= intervalo.inicio && dataVenda <= intervalo.fim;
+        });
+      }
+    }
+
     if (pagto) lista = lista.filter(v => v.forma_pagamento === pagto);
     if (statusPagamento) lista = lista.filter(v => v.status_pagamento === statusPagamento);
     renderTabela(lista);
